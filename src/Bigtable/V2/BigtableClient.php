@@ -1,12 +1,12 @@
 <?php
 /*
- * Copyright 2017 Google LLC
+ * Copyright 2017, Google LLC All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,9 +21,9 @@
  * https://github.com/google/googleapis/blob/master/google/bigtable/v2/bigtable.proto
  * and updates to that file get reflected here through a refresh process.
  *
- * EXPERIMENTAL: This client library class has not yet been declared GA (1.0). This means that
- * even though we intend the surface to be stable, we may make backwards incompatible changes
- * if necessary.
+ * EXPERIMENTAL: this client library class has not yet been declared beta. This class may change
+ * more frequently than those which have been declared beta or 1.0, including changes which break
+ * backwards compatibility.
  *
  * @experimental
  */
@@ -31,12 +31,18 @@
 namespace Google\Cloud\Bigtable\V2;
 
 use Google\Cloud\Bigtable\V2\Gapic\BigtableGapicClient;
+use Google\Cloud\Bigtable\V2\ChunkFormatter;
 
 /**
  * {@inheritdoc}
  */
+// class BigtableClient extends BigtableGapicClient
 class BigtableClient extends BigtableGapicClient
 {
-    // This class is intentionally empty, and is intended to hold manual
-    // additions to the generated {@see BigtableClientImpl} class.
+    // This class is intentionally empty, and is intended to hold manual additions to the generated {@see BigtableClientImpl} class.
+    public function readRows($tableName, $optionalArgs = []){
+        $serverStream = parent::readRows($tableName, $optionalArgs);
+        $chunkFormatter = new ChunkFormatter($serverStream, $optionalArgs);
+        return $chunkFormatter;
+    }
 }
