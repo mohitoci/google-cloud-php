@@ -1,12 +1,12 @@
 <?php
-/*
- * Copyright 2017 Google LLC
+/*!
+ * Copyright 2016 Google Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,74 +14,114 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 namespace Google\Cloud\Bigtable\V2;
+class Cell {
+	private $family;
+	private $qualifier;
+	private $timestamp;
+	private $value;
+	private $labels;
 
-/**
- *
- */
-class FlatRow
-{
+	public function setFamily($family) {
+		$this->family = $family;
+	}
 
-    private $rowKey = null;
-    private $cells  = [];
+	public function getFamily() {
+		return $this->family;
+	}
 
-    /**
-     * @param string $rowKey
-     * @param string $cells
-     */
-    public function setFlatRow($rowKey, $cells)
-    {
-        $this->rowKey = $rowKey;
-        $this->cells  = $cells;
-    }
+	public function setQualifier($qualifier) {
+		$this->qualifier = $qualifier;
+	}
 
-    /**
-     * Reset rowKey and cells
-     */
-    public function reSetFlatRow()
-    {
-        $this->rowKey = '';
-        $this->cells  = [];
-    }
+	public function getQualifier() {
+		return $this->qualifier;
+	}
 
-    /**
-     * @param string $rowKey
-     */
-    public function setRowKey($rowKey)
-    {
-        $this->rowKey = $rowKey;
-    }
+	public function setTimestamp($timestamp) {
+		$this->timestamp = $timestamp;
+	}
 
-    /**
-     * @return string
-     */
-    public function getRowKey()
-    {
-        return $this->rowKey;
-    }
+	public function getTimestamp() {
+		return $this->timestamp;
+	}
 
-    /**
-     * @param $cell Google\Cloud\Bigtable\V2\Cell
-     */
-    public function setCells($cell)
-    {
-        $this->cells = $cell;
-    }
+	public function setValue($value) {
+		$this->value = $value;
+	}
 
-    /**
-     * @return Google\Cloud\Bigtable\V2\Cell
-     */
-    public function getCells()
-    {
-        return $this->cells;
-    }
+	public function getValue() {
+		return $this->value;
+	}
 
-    /**
-     * @param $cell Google\Cloud\Bigtable\V2\Cell
-     */
-    public function addCell($cell)
-    {
-        array_push($this->cells, $cell);
-    }
+	public function setLabels($labels) {
+		$this->labels = $labels;
+	}
+
+	public function getLabels() {
+		return $this->labels;
+	}
+
+	public function appendValue($value) {
+		$this->value = $this->value.$value;
+	}
+
+	public function equals($obj) {
+		if (!($obj instanceof Cell)) {
+			return false;
+		}
+		$other = $obj;
+		return
+		$this->timestamp == $other->timestamp &&
+		$this->family == $other->family &&
+		$this->qualifier == $other->qualifier &&
+		$this->value == $other->value &&
+		Objects.equal(labels, other.labels);
+	}
+
 }
+
+class FlatRow {
+	private $rowKey = NULL;
+	private $cells  = [];
+
+	public function setFlatRow($rowKey, $cells) {
+		$this->rowKey = $rowKey;
+		$this->cells  = $cells;
+	}
+
+	public function reSetFlatRow() {
+		$this->rowKey = '';
+		$this->cells  = [];
+	}
+
+	public function getRowKey() {
+		return $this->rowKey;
+	}
+
+	public function setRowKey($rowKey) {
+		$this->rowKey = $rowKey;
+	}
+
+	public function getCells() {
+		return $this->cells;
+	}
+
+	public function setCells($cells) {
+		$this->cells = $cells;
+	}
+	public function addCell($cell) {
+		array_push($this->cells, $cell);
+	}
+
+	public function equals($obj) {
+		if (!($obj instanceof FlatRow)) {
+			return false;
+		}
+		// FlatRow other = (FlatRow) obj;
+		// return Objects.equal(rowKey, other.rowKey) &&
+		//     Objects.equal(cells, other.getCells());
+	}
+}
+
+?>
