@@ -1,15 +1,37 @@
 <?php
-require '../vendor/autoload.php';
+/*
+ * Copyright 2017, Google LLC All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+require_once __DIR__.'/../vendor/autoload.php';
 
 use Google\Cloud\Bigtable\src\BigtableTable;
+use Google\Cloud\Bigtable\V2\RowSet;
 
-class PerformanceTest {
+/**
+ * 
+ */
+class PerformanceTest
+{
 	private $BigtableTable;
 	private $randomValues;
 	private $randomTotal = 1000;
 
-	function __construct() {
-		$this->BigtableTable = new BigtableTable();
+	function __construct($args)
+	{
+		$this->BigtableTable = new BigtableTable($args);
 		$length              = 100;
 		for ($i = 1; $i <= $this->randomTotal; $i++) {
 			$this->randomValues[$i] = substr(str_shuffle(str_repeat($x = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', ceil($length/strlen($x)))), 1, $length);
@@ -17,23 +39,35 @@ class PerformanceTest {
 	}
 
 	/**
+	 * current milli sec
+	 *
+	 * @return int
+	 */
+	public function milliSec()
+	{
+		return round(microtime(true)*1000);
+	}
+
+	/**
 	 * loadRecord for mutateRows in table
 	 *
-	 * @param string $table         The unique name of the table whose families should be modified.
-	 *                              Values are of the form
-	 *                              `projects/<project>/instances/<instance>/tables/<table>`.
+	 * @param string $tableId
+	 * 
 	 * @param string $rowKey_pref   ex. perf
+	 * 
 	 * @param string $columnFamily	column family name
+	 * 
 	 * @param array  optionalArgs{
-	 *     @integer $total_row
-	 *     @integer $batch_size
-	 *     @integer $timeoutMillis
+	 *     @type int $total_row
+	 *     @type int $batch_size
+	 *     @type int $timeoutMillis Timeout to use for this call.
 	 *
 	 * @return array
 	 */
-	public function loadRecord($table, $rowKey_pref, $columnFamily, $optionalArgs = []) {
-		$total_row  = (isset($optionalArgs['total_row']))?$optionalArgs['total_row']:10000;
-		$batch_size = (isset($optionalArgs['batch_size']))?$optionalArgs['batch_size']:1000;
+	public function loadRecord($tableId, $rowKey_pref, $columnFamily, $optionalArgs = [])
+	{
+		$total_row  = $optionalArgs['total_row'];
+		$batch_size = $optionalArgs['batch_size'];
 
 		if ($total_row < $batch_size) {
 			throw new ValidationException('Please set total row (total_row) >= '.$batch_size);
@@ -45,7 +79,8 @@ class PerformanceTest {
 		$index            = 0;
 		$success          = 0;
 		$failure          = 0;
-		$processStartTime = round(microtime(true)*1000);
+		$total_time_elapsed = 0;
+		//$processStartTime = $this->milliSec();
 		for ($k = 0; $k < $interations; $k++) {
 			$entries = [];
 			for ($j = 0; $j < $batch_size; $j++) {
@@ -66,8 +101,8 @@ class PerformanceTest {
 				$index++;
 			}
 
-			$startTime    = round(microtime(true)*1000);
-			$ServerStream = $this->BigtableTable->mutateRows($table, $entries, $optionalArgs);
+			$startTime    = $this->milliSec();
+			$ServerStream = $this->BigtableTable->mutateRows($tableId, $entries, $optionalArgs);
 			$current      = $ServerStream->readAll()->current();
 			$Entries      = $current->getEntries();
 			foreach ($Entries->getIterator() as $Iterator) {
@@ -79,20 +114,22 @@ class PerformanceTest {
 					$failure++;
 				}
 			}
-			$endTime = round(microtime(true)*1000)-$startTime;
-			hdr_record_value($hdr, $endTime);
-			// echo "\nProcess time for mutateRows ".$index." is ".$endTime;
+			$time_elapsed = $this->milliSec() - $startTime;
+			hdr_record_value($hdr, $time_elapsed);
+			$total_time_elapsed += $time_elapsed;
+			echo "\nProcess time for mutateRows $index is $time_elapsed";
 		}
-		$time_elapsed_secs = round(microtime(true)*1000)-$processStartTime;
-		echo "\nTotal time take for loading rows is $time_elapsed_secs (milli sec)";
+		//$total_time_elapsed = $this->milliSec() - $processStartTime;
+		echo "\nTotal time take for loading rows is $total_time_elapsed (milli sec)";
 
 		$min           = hdr_min($hdr);
 		$max           = hdr_max($hdr);
 		$total         = $index;
-		$throughput    = round($total/$time_elapsed_secs, 4);
+		$totalSec      = $total_time_elapsed / 1000;
+		$throughput    = round($total/$totalSec, 4);
 		$statesticData = [
 			'operation_name'     => 'Data Load',
-			'run_time'           => $time_elapsed_secs,
+			'run_time'           => $total_time_elapsed,
 			'mix_latency'        => $max/100,
 			'min_latency'        => $min/100,
 			'oprations'          => $total,
@@ -112,26 +149,28 @@ class PerformanceTest {
 	/**
 	 * random read write row
 	 *
-	 * @param string $table         The unique name of the table whose families should be modified.
-	 *                              Values are of the form
-	 *                              `projects/<project>/instances/<instance>/tables/<table>`.
+	 * @param string $tableId
+	 * 
 	 * @param string $rowKey_pref   ex. perf
+	 * 
 	 * @param string $cf   			column family name
+	 * 
 	 * @param array  option{
-	 *     @integer $total_row
-	 *     @integer $timeoutsec
+	 *     @param int $total_row
+	 *     @param int $timeoutsec
 	 *
 	 * @return array
 	 */
-	public function randomReadWrite($table, $rowKey_pref, $cf, $option) {
-		$total_row      = (isset($option['total_row']))?$option['total_row']:10000000;
+	public function randomReadWrite($tableId, $rowKey_pref, $cf, $option)
+	{
+		$total_row      = $option['total_row'];
 		$readRowsTotal  = ['success' => [], 'failure' => []];
 		$writeRowsTotal = ['success' => [], 'failure' => []];
 
 		$hdr_read  = hdr_init(1, 3600000, 3);
 		$hdr_write = hdr_init(1, 3600000, 3);
 
-		$operation_start            = round(microtime(true)*1000);
+		$operation_start            = $this->milliSec();
 		$read_oprations_total_time  = 0;
 		$write_oprations_total_time = 0;
 
@@ -147,27 +186,32 @@ class PerformanceTest {
 		while ($currentTimestemp < $endTimestemp) {
 			$random       = mt_rand(0, $total_row);
 			$randomRowKey = sprintf($rowKey_pref.'%07d', $random);
-			$start        = round(microtime(true)*1000);
+
+			//Row set
+			$RowSet = new RowSet();
+			$RowSet->setRowKeys([$randomRowKey]);
+			$options['rows'] = $RowSet;
 			if ($i%2 == 0) {
-				$res               = $this->BigtableTable->readRows($table, [$randomRowKey]);
-				$time_elapsed_secs = round(microtime(true)*1000)-$start;
+				$startAt = $this->milliSec();
+				$res = $this->BigtableTable->readRows($tableId, $options);
+				$time_elapsed = $this->milliSec() - $startAt;
 				if (count($res)) {
-					$readRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed_secs];
+					$readRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
 				} else {
-					$readRowsTotal['failure'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed_secs];
+					$readRowsTotal['failure'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
 				}
-				$read_oprations_total_time += $time_elapsed_secs;
-				hdr_record_value($hdr_read, $time_elapsed_secs);
+				$read_oprations_total_time += $time_elapsed;
+				hdr_record_value($hdr_read, $time_elapsed);
 			} else {
 				$value             = $this->randomValues[mt_rand(1, $this->randomTotal)];
 				$cell['cf']        = $cf;//Specify column name, without column familly not updating row
 				$cell['value']     = $value;
 				$cell['qualifier'] = 'field0';//Specify qualifier (optional)
 
-				$mutationCell = $this->BigtableTable->mutationCell($cell);
-				$this->BigtableTable->mutateRow($table, $randomRowKey, [$mutationCell]);
-				$row = $this->BigtableTable->readRows($table, [$randomRowKey]);
-
+				$mutationCell[] = $this->BigtableTable->mutationCell($cell);
+				$this->BigtableTable->mutateRow($tableId, $randomRowKey, $mutationCell);
+				$startAt = $this->milliSec();
+				$row = $this->BigtableTable->readRows($tableId, $options);
 				$flag  = false;
 				$cells = $row[0]->getCells();
 				foreach ($cells as $val) {
@@ -176,25 +220,27 @@ class PerformanceTest {
 						break;
 					}
 				}
-				$time_elapsed_secs = round(microtime(true)*1000)-$start;
+				$time_elapsed = $this->milliSec() - $startAt;
 				if ($flag) {
-					$writeRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed_secs];
+					$writeRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
 				} else {
-					$writeRowsTotal['failure'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed_secs];
+					$writeRowsTotal['failure'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
 				}
-				$write_oprations_total_time += $time_elapsed_secs;
-				hdr_record_value($hdr_write, $time_elapsed_secs);
+				$write_oprations_total_time += $time_elapsed;
+				hdr_record_value($hdr_write, $time_elapsed);
 			}
 			$i++;
 			$currentTimestemp = new DateTime(date("h:i:s"));
 		}
 		echo "\nRandom read write rows operation complete\n";
-		$total_runtime = round(microtime(true)*1000)-$operation_start;
+		$total_runtime = $this->milliSec() - $operation_start;
+		
 		//Read operations
 		$min_read       = hdr_min($hdr_read);
 		$max_read       = hdr_max($hdr_read);
 		$total_read     = count($readRowsTotal['success'])+count($readRowsTotal['failure']);
-		$readThroughput = round($total_read/$read_oprations_total_time, 4);
+		$totalReadTimeSec = $read_oprations_total_time/1000;
+		$readThroughput = round($total_read/$totalReadTimeSec, 4);
 		$readOperations = [
 			'operation_name'     => 'Random Read',
 			'run_time'           => $read_oprations_total_time,
@@ -216,7 +262,8 @@ class PerformanceTest {
 		$min_write       = hdr_min($hdr_write);
 		$max_write       = hdr_max($hdr_write);
 		$total_write     = count($writeRowsTotal['success'])+count($writeRowsTotal['failure']);
-		$writeThroughput = round($total_write/$write_oprations_total_time, 4);
+		$totalWriteTimeSec = $write_oprations_total_time/1000;
+		$writeThroughput = round($total_write/$totalWriteTimeSec, 4);
 		$writeOperations = [
 			'operation_name'     => 'Random Write',
 			'run_time'           => $write_oprations_total_time,
@@ -237,13 +284,26 @@ class PerformanceTest {
 	}
 }
 
-$projectId  = "grass-clump-479";
-$instanceId = "php-perf";
-$table      = "perf-test";
-$tableName  = BigtableTable::tableName($projectId, $instanceId, $table);
-
 foreach ($argv as $val) {
-	if (strpos($val, 'totalRows') !== false) {
+	if (strpos($val, 'help') !== false) {
+		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--tableId\t table name to perform operations \n\n--totalRows\t Total no. of rows to inserting \t totalRows >= batchSize \n\n--batchSize\t Defines that how many rows mutate at a time \t batchSize is > 0 and <10000 \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--timeoutMillis\t timeoutMillis for mutate rows \n\nEx. totalRows=10000 batchsize=1000 timeoutMinute=30 timeoutMillis=60000 \nNote. timeoutMillis are optional \n\n";
+		exit($txt);
+	} else if (strpos($val, 'projectId') !== false) {
+		$val = explode('=', $val);
+		if (count($val) > 1) {
+			$projectId = $val[1];
+		}
+	} else if (strpos($val, 'instanceId') !== false) {
+		$val = explode('=', $val);
+		if (count($val) > 1) {
+			$instanceId = $val[1];
+		}
+	} else if (strpos($val, 'tableId') !== false) {
+		$val = explode('=', $val);
+		if (count($val) > 1) {
+			$tableId = $val[1];
+		}
+	} else if (strpos($val, 'totalRows') !== false) {
 		$val = explode('=', $val);
 		if (count($val) > 1 && is_int((int) $val[1])) {
 			$totalRows = (int) $val[1];
@@ -262,7 +322,24 @@ foreach ($argv as $val) {
 		if (count($val) > 1 && is_int((int) $val[1])) {
 			$timeoutMillis = (int) $val[1];
 		}
+	} else if (strpos($val, 'timeoutMinute') !== false) {
+		$val = explode('=', $val);
+		if (count($val) >= 1 && is_int((int) $val[1])) {
+			$minute = (int) $val[1];
+		} else {
+			exit("timeoutMinute is >= 1\n");
+		}
 	}
+}
+
+if (!isset($projectId)) {
+	exit("projectId is missing\n");
+}
+if (!isset($instanceId)) {
+	exit("instanceId is missing\n");
+}
+if (!isset($tableId)) {
+	exit("tableId is missing\n");
 }
 
 if (!isset($totalRows)) {
@@ -273,22 +350,31 @@ if (!isset($batchSize)) {
 	exit("batchSize is missing\n");
 }
 
-// $timeoutMillis = 6*60*60000; //60000 = 60 sec
-$options                                              = ['total_row' => $totalRows, 'batch_size' => $batchSize];
-if (isset($timeoutMillis)) {$options['timeoutMillis'] = $timeoutMillis;
+if (!isset($minute)) {
+	exit("timeoutMinute is missing\n");
 }
 
-$rowKey_pref  = 'keyz';
+// $projectId  = "grass-clump-479";
+// $instanceId = "php-perf";
+// $tableId      = "php-test";
+$args = ['projectId' => $projectId, 'instanceId' =>$instanceId];
+
+$options = ['total_row' => $totalRows, 'batch_size' => $batchSize];
+if (isset($timeoutMillis)) {
+	$options['timeoutMillis'] = $timeoutMillis;
+}
+
+$rowKey_pref  = 'perf';
 $columnFamily = 'cf';
-echo $options['total_row']." rows loading... \n";
-$PerformanceTest = new PerformanceTest();
-$inserted        = $PerformanceTest->loadRecord($tableName, $rowKey_pref, $columnFamily, $options);
+echo $options['total_row']." rows loading ... \n";
+$PerformanceTest = new PerformanceTest($args);
+$inserted        = $PerformanceTest->loadRecord($tableId, $rowKey_pref, $columnFamily, $options);
 
 //Random read row
 echo "\nRandom read write rows operation";
-$timeoutsec      = 5;//sec
+$timeoutsec      = $minute *60;//sec
 $options         = ['total_row' => $totalRows, 'timeoutsec' => $timeoutsec];
-$randomReadWrite = $PerformanceTest->randomReadWrite($tableName, $rowKey_pref, $columnFamily, $options);
+$randomReadWrite = $PerformanceTest->randomReadWrite($tableId, $rowKey_pref, $columnFamily, $options);
 
 $info = array(
 	'Platform,Linux',
@@ -315,4 +401,3 @@ fclose($fp);
 
 echo "\nFile generated ".$filepath;
 echo "\n";
-?>
