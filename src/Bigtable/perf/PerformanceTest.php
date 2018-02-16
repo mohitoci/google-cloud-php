@@ -315,9 +315,9 @@ if (!isset($minute)) {
 
 // $projectId  = "grass-clump-479";
 // $instanceId = "php-perf";
-// $table      = "perf-test";
+// $tableId      = "perf-test";
 $BigtableTable = new BigtableTable();
-$tableName  = $BigtableTable->tableName($projectId, $instanceId, $table);
+$tableName  = $BigtableTable->tableName($projectId, $instanceId, $tableId);
 
 // $timeoutMillis = 6*60*60000; //60000 = 60 sec
 $options = ['total_row' => $totalRows, 'batch_size' => $batchSize];

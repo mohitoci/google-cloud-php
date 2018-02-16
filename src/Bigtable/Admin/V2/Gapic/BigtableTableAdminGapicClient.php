@@ -1,12 +1,12 @@
 <?php
 /*
- * Copyright 2017 Google LLC
+ * Copyright 2017, Google LLC All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,51 +21,34 @@
  * https://github.com/google/googleapis/blob/master/google/bigtable/admin/v2/bigtable_table_admin.proto
  * and updates to that file get reflected here through a refresh process.
  *
- * EXPERIMENTAL: This client library class has not yet been declared GA (1.0). This means that
- * even though we intend the surface to be stable, we may make backwards incompatible changes
- * if necessary.
+ * EXPERIMENTAL: this client library class has not yet been declared beta. This class may change
+ * more frequently than those which have been declared beta or 1.0, including changes which break
+ * backwards compatibility.
  *
  * @experimental
  */
 
 namespace Google\Cloud\Bigtable\Admin\V2\Gapic;
 
-use Google\ApiCore\ApiException;
-use Google\ApiCore\Call;
-use Google\ApiCore\GapicClientTrait;
-use Google\ApiCore\LongRunning\OperationsClient;
-use Google\ApiCore\OperationResponse;
-use Google\ApiCore\PathTemplate;
-use Google\ApiCore\RetrySettings;
-use Google\ApiCore\Transport\TransportInterface;
-use Google\ApiCore\ValidationException;
-use Google\Auth\CredentialsLoader;
-use Google\Cloud\Bigtable\Admin\V2\CheckConsistencyRequest;
-use Google\Cloud\Bigtable\Admin\V2\CheckConsistencyResponse;
-use Google\Cloud\Bigtable\Admin\V2\CreateTableFromSnapshotRequest;
-use Google\Cloud\Bigtable\Admin\V2\CreateTableRequest;
-use Google\Cloud\Bigtable\Admin\V2\CreateTableRequest_Split;
-use Google\Cloud\Bigtable\Admin\V2\DeleteSnapshotRequest;
-use Google\Cloud\Bigtable\Admin\V2\DeleteTableRequest;
-use Google\Cloud\Bigtable\Admin\V2\DropRowRangeRequest;
-use Google\Cloud\Bigtable\Admin\V2\GenerateConsistencyTokenRequest;
-use Google\Cloud\Bigtable\Admin\V2\GenerateConsistencyTokenResponse;
-use Google\Cloud\Bigtable\Admin\V2\GetSnapshotRequest;
-use Google\Cloud\Bigtable\Admin\V2\GetTableRequest;
-use Google\Cloud\Bigtable\Admin\V2\ListSnapshotsRequest;
-use Google\Cloud\Bigtable\Admin\V2\ListSnapshotsResponse;
-use Google\Cloud\Bigtable\Admin\V2\ListTablesRequest;
-use Google\Cloud\Bigtable\Admin\V2\ListTablesResponse;
-use Google\Cloud\Bigtable\Admin\V2\ModifyColumnFamiliesRequest;
-use Google\Cloud\Bigtable\Admin\V2\ModifyColumnFamiliesRequest_Modification;
-use Google\Cloud\Bigtable\Admin\V2\Snapshot;
-use Google\Cloud\Bigtable\Admin\V2\SnapshotTableRequest;
-use Google\Cloud\Bigtable\Admin\V2\Table;
-use Google\LongRunning\Operation;
-use Google\Protobuf\Duration;
-use Google\Protobuf\GPBEmpty;
-use Grpc\Channel;
-use Grpc\ChannelCredentials;
+use Google\Bigtable\Admin\V2\BigtableTableAdminGrpcClient;
+use Google\Bigtable\Admin\V2\CreateTableRequest;
+use Google\Bigtable\Admin\V2\CreateTableRequest_Split as Split;
+use Google\Bigtable\Admin\V2\DeleteTableRequest;
+use Google\Bigtable\Admin\V2\DropRowRangeRequest;
+use Google\Bigtable\Admin\V2\GetTableRequest;
+use Google\Bigtable\Admin\V2\ListTablesRequest;
+use Google\Bigtable\Admin\V2\ModifyColumnFamiliesRequest;
+use Google\Bigtable\Admin\V2\ModifyColumnFamiliesRequest_Modification as Modification;
+use Google\Bigtable\Admin\V2\Table;
+use Google\Bigtable\Admin\V2\Table_View as View;
+use Google\Cloud\Version;
+use Google\GAX\AgentHeaderDescriptor;
+use Google\GAX\ApiCallable;
+use Google\GAX\CallSettings;
+use Google\GAX\GrpcCredentialsHelper;
+use Google\GAX\PageStreamingDescriptor;
+use Google\GAX\PathTemplate;
+use Google\GAX\ValidationException;
 
 /**
  * Service Description: Service for creating, configuring, and deleting Cloud Bigtable tables.
@@ -74,16 +57,16 @@ use Grpc\ChannelCredentials;
  * Provides access to the table schemas only, not the data stored within
  * the tables.
  *
- * EXPERIMENTAL: This client library class has not yet been declared GA (1.0). This means that
- * even though we intend the surface to be stable, we may make backwards incompatible changes
- * if necessary.
+ * EXPERIMENTAL: this client library class has not yet been declared beta. This class may change
+ * more frequently than those which have been declared beta or 1.0, including changes which break
+ * backwards compatibility.
  *
  * This class provides the ability to make remote calls to the backing service through method
  * calls that map to API methods. Sample code to get started:
  *
  * ```
- * $bigtableTableAdminClient = new BigtableTableAdminClient();
  * try {
+ *     $bigtableTableAdminClient = new BigtableTableAdminClient();
  *     $formattedParent = $bigtableTableAdminClient->instanceName('[PROJECT]', '[INSTANCE]');
  *     $tableId = '';
  *     $table = new Table();
@@ -102,13 +85,6 @@ use Grpc\ChannelCredentials;
  */
 class BigtableTableAdminGapicClient
 {
-    use GapicClientTrait;
-
-    /**
-     * The name of the service.
-     */
-    const SERVICE_NAME = 'google.bigtable.admin.v2.BigtableTableAdmin';
-
     /**
      * The default address of the service.
      */
@@ -130,67 +106,29 @@ class BigtableTableAdminGapicClient
     const CODEGEN_VERSION = '0.0.5';
 
     private static $instanceNameTemplate;
-    private static $clusterNameTemplate;
-    private static $snapshotNameTemplate;
     private static $tableNameTemplate;
     private static $pathTemplateMap;
+    private static $gapicVersion;
+    private static $gapicVersionLoaded = false;
 
-    private $operationsClient;
-
-    private static function getClientDefaults()
-    {
-        return [
-            'serviceName' => self::SERVICE_NAME,
-            'serviceAddress' => self::SERVICE_ADDRESS,
-            'port' => self::DEFAULT_SERVICE_PORT,
-            'scopes' => [
-                'https://www.googleapis.com/auth/bigtable.admin',
-                'https://www.googleapis.com/auth/bigtable.admin.cluster',
-                'https://www.googleapis.com/auth/bigtable.admin.instance',
-                'https://www.googleapis.com/auth/bigtable.admin.table',
-                'https://www.googleapis.com/auth/cloud-bigtable.admin',
-                'https://www.googleapis.com/auth/cloud-bigtable.admin.cluster',
-                'https://www.googleapis.com/auth/cloud-bigtable.admin.table',
-                'https://www.googleapis.com/auth/cloud-platform',
-                'https://www.googleapis.com/auth/cloud-platform.read-only',
-            ],
-            'clientConfigPath' => __DIR__.'/../resources/bigtable_table_admin_client_config.json',
-            'restClientConfigPath' => __DIR__.'/../resources/bigtable_table_admin_rest_client_config.php',
-            'descriptorsConfigPath' => __DIR__.'/../resources/bigtable_table_admin_descriptor_config.php',
-            'versionFile' => __DIR__.'/../../VERSION',
-        ];
-    }
+    protected $grpcCredentialsHelper;
+    protected $bigtableTableAdminStub;
+    private $scopes;
+    private $defaultCallSettings;
+    private $descriptors;
 
     private static function getInstanceNameTemplate()
     {
-        if (null == self::$instanceNameTemplate) {
+        if (self::$instanceNameTemplate == null) {
             self::$instanceNameTemplate = new PathTemplate('projects/{project}/instances/{instance}');
         }
 
         return self::$instanceNameTemplate;
     }
 
-    private static function getClusterNameTemplate()
-    {
-        if (null == self::$clusterNameTemplate) {
-            self::$clusterNameTemplate = new PathTemplate('projects/{project}/instances/{instance}/clusters/{cluster}');
-        }
-
-        return self::$clusterNameTemplate;
-    }
-
-    private static function getSnapshotNameTemplate()
-    {
-        if (null == self::$snapshotNameTemplate) {
-            self::$snapshotNameTemplate = new PathTemplate('projects/{project}/instances/{instance}/clusters/{cluster}/snapshots/{snapshot}');
-        }
-
-        return self::$snapshotNameTemplate;
-    }
-
     private static function getTableNameTemplate()
     {
-        if (null == self::$tableNameTemplate) {
+        if (self::$tableNameTemplate == null) {
             self::$tableNameTemplate = new PathTemplate('projects/{project}/instances/{instance}/tables/{table}');
         }
 
@@ -199,16 +137,45 @@ class BigtableTableAdminGapicClient
 
     private static function getPathTemplateMap()
     {
-        if (null == self::$pathTemplateMap) {
+        if (self::$pathTemplateMap == null) {
             self::$pathTemplateMap = [
                 'instance' => self::getInstanceNameTemplate(),
-                'cluster' => self::getClusterNameTemplate(),
-                'snapshot' => self::getSnapshotNameTemplate(),
                 'table' => self::getTableNameTemplate(),
             ];
         }
 
         return self::$pathTemplateMap;
+    }
+
+    private static function getPageStreamingDescriptors()
+    {
+        $listTablesPageStreamingDescriptor =
+                new PageStreamingDescriptor([
+                    'requestPageTokenGetMethod' => 'getPageToken',
+                    'requestPageTokenSetMethod' => 'setPageToken',
+                    'responsePageTokenGetMethod' => 'getNextPageToken',
+                    'resourcesGetMethod' => 'getTables',
+                ]);
+
+        $pageStreamingDescriptors = [
+            'listTables' => $listTablesPageStreamingDescriptor,
+        ];
+
+        return $pageStreamingDescriptors;
+    }
+
+    private static function getGapicVersion()
+    {
+        if (!self::$gapicVersionLoaded) {
+            if (file_exists(__DIR__.'/../VERSION')) {
+                self::$gapicVersion = trim(file_get_contents(__DIR__.'/../VERSION'));
+            } elseif (class_exists(Version::class)) {
+                self::$gapicVersion = Version::VERSION;
+            }
+            self::$gapicVersionLoaded = true;
+        }
+
+        return self::$gapicVersion;
     }
 
     /**
@@ -226,48 +193,6 @@ class BigtableTableAdminGapicClient
         return self::getInstanceNameTemplate()->render([
             'project' => $project,
             'instance' => $instance,
-        ]);
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a cluster resource.
-     *
-     * @param string $project
-     * @param string $instance
-     * @param string $cluster
-     *
-     * @return string The formatted cluster resource.
-     * @experimental
-     */
-    public static function clusterName($project, $instance, $cluster)
-    {
-        return self::getClusterNameTemplate()->render([
-            'project' => $project,
-            'instance' => $instance,
-            'cluster' => $cluster,
-        ]);
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a snapshot resource.
-     *
-     * @param string $project
-     * @param string $instance
-     * @param string $cluster
-     * @param string $snapshot
-     *
-     * @return string The formatted snapshot resource.
-     * @experimental
-     */
-    public static function snapshotName($project, $instance, $cluster, $snapshot)
-    {
-        return self::getSnapshotNameTemplate()->render([
-            'project' => $project,
-            'instance' => $instance,
-            'cluster' => $cluster,
-            'snapshot' => $snapshot,
         ]);
     }
 
@@ -296,8 +221,6 @@ class BigtableTableAdminGapicClient
      * The following name formats are supported:
      * Template: Pattern
      * - instance: projects/{project}/instances/{instance}
-     * - cluster: projects/{project}/instances/{instance}/clusters/{cluster}
-     * - snapshot: projects/{project}/instances/{instance}/clusters/{cluster}/snapshots/{snapshot}
      * - table: projects/{project}/instances/{instance}/tables/{table}.
      *
      * The optional $template argument can be supplied to specify a particular pattern, and must
@@ -336,41 +259,6 @@ class BigtableTableAdminGapicClient
     }
 
     /**
-     * Return an OperationsClient object with the same endpoint as $this.
-     *
-     * @return OperationsClient
-     * @experimental
-     */
-    public function getOperationsClient()
-    {
-        return $this->operationsClient;
-    }
-
-    /**
-     * Resume an existing long running operation that was previously started
-     * by a long running API method. If $methodName is not provided, or does
-     * not match a long running API method, then the operation can still be
-     * resumed, but the OperationResponse object will not deserialize the
-     * final response.
-     *
-     * @param string $operationName The name of the long running operation
-     * @param string $methodName    The name of the method used to start the operation
-     *
-     * @return OperationResponse
-     * @experimental
-     */
-    public function resumeOperation($operationName, $methodName = null)
-    {
-        $options = isset($this->descriptors[$methodName]['longRunning'])
-            ? $this->descriptors[$methodName]['longRunning']
-            : [];
-        $operation = new OperationResponse($operationName, $this->getOperationsClient(), $options);
-        $operation->reload();
-
-        return $operation;
-    }
-
-    /**
      * Constructor.
      *
      * @param array $options {
@@ -379,23 +267,20 @@ class BigtableTableAdminGapicClient
      *     @type string $serviceAddress The domain name of the API remote host.
      *                                  Default 'bigtableadmin.googleapis.com'.
      *     @type mixed $port The port on which to connect to the remote host. Default 443.
-     *     @type Channel $channel
-     *           A `Channel` object. If not specified, a channel will be constructed.
-     *           NOTE: This option is only valid when utilizing the gRPC transport.
-     *     @type ChannelCredentials $sslCreds
+     *     @type \Grpc\Channel $channel
+     *           A `Channel` object to be used by gRPC. If not specified, a channel will be constructed.
+     *     @type \Grpc\ChannelCredentials $sslCreds
      *           A `ChannelCredentials` object for use with an SSL-enabled channel.
      *           Default: a credentials object returned from
-     *           \Grpc\ChannelCredentials::createSsl().
-     *           NOTE: This option is only valid when utilizing the gRPC transport. Also, if the $channel
-     *           optional argument is specified, then this argument is unused.
+     *           \Grpc\ChannelCredentials::createSsl()
+     *           NOTE: if the $channel optional argument is specified, then this argument is unused.
      *     @type bool $forceNewChannel
      *           If true, this forces gRPC to create a new channel instead of using a persistent channel.
      *           Defaults to false.
-     *           NOTE: This option is only valid when utilizing the gRPC transport. Also, if the $channel
-     *           optional argument is specified, then this option is unused.
-     *     @type CredentialsLoader $credentialsLoader
+     *           NOTE: if the $channel optional argument is specified, then this option is unused.
+     *     @type \Google\Auth\CredentialsLoader $credentialsLoader
      *           A CredentialsLoader object created using the Google\Auth library.
-     *     @type string[] $scopes A string array of scopes to use when acquiring credentials.
+     *     @type array $scopes A string array of scopes to use when acquiring credentials.
      *                          Defaults to the scopes for the Cloud Bigtable Admin API.
      *     @type string $clientConfigPath
      *           Path to a JSON file containing client method configuration, including retry settings.
@@ -406,35 +291,83 @@ class BigtableTableAdminGapicClient
      *     @type array $retryingOverride
      *           An associative array in which the keys are method names (e.g. 'createFoo'), and
      *           the values are retry settings to use for that method. The retry settings for each
-     *           method can be a {@see Google\ApiCore\RetrySettings} object, or an associative array
-     *           of retry settings parameters. See the documentation on {@see Google\ApiCore\RetrySettings}
+     *           method can be a {@see Google\GAX\RetrySettings} object, or an associative array
+     *           of retry settings parameters. See the documentation on {@see Google\GAX\RetrySettings}
      *           for example usage. Passing a value of null is equivalent to a value of
      *           ['retriesEnabled' => false]. Retry settings provided in this setting override the
      *           settings in $clientConfigPath.
-     *     @type callable $authHttpHandler A handler used to deliver PSR-7 requests specifically
-     *           for authentication. Should match a signature of
-     *           `function (RequestInterface $request, array $options) : ResponseInterface`.
-     *     @type callable $httpHandler A handler used to deliver PSR-7 requests. Should match a
-     *           signature of `function (RequestInterface $request, array $options) : PromiseInterface`.
-     *           NOTE: This option is only valid when utilizing the REST transport.
-     *     @type string|TransportInterface $transport The transport used for executing network
-     *           requests. May be either the string `rest` or `grpc`. Additionally, it is possible
-     *           to pass in an already instantiated transport. Defaults to `grpc` if gRPC support is
-     *           detected on the system.
      * }
      * @experimental
      */
     public function __construct($options = [])
     {
-        $options += self::getClientDefaults();
-        $this->setClientOptions($options);
-        $this->pluckArray([
-            'serviceName',
-            'clientConfigPath',
-            'descriptorsConfigPath',
-        ], $options);
-        $this->operationsClient = $this->pluck('operationsClient', $options, false)
-            ?: new OperationsClient($options);
+        $defaultOptions = [
+            'serviceAddress' => self::SERVICE_ADDRESS,
+            'port' => self::DEFAULT_SERVICE_PORT,
+            'scopes' => [
+                'https://www.googleapis.com/auth/bigtable.admin',
+                'https://www.googleapis.com/auth/bigtable.admin.cluster',
+                'https://www.googleapis.com/auth/bigtable.admin.instance',
+                'https://www.googleapis.com/auth/bigtable.admin.table',
+                'https://www.googleapis.com/auth/cloud-bigtable.admin',
+                'https://www.googleapis.com/auth/cloud-bigtable.admin.cluster',
+                'https://www.googleapis.com/auth/cloud-bigtable.admin.table',
+                'https://www.googleapis.com/auth/cloud-platform',
+                'https://www.googleapis.com/auth/cloud-platform.read-only',
+            ],
+            'retryingOverride' => null,
+            'libName' => null,
+            'libVersion' => null,
+            'clientConfigPath' => __DIR__.'/../resources/bigtable_table_admin_client_config.json',
+        ];
+        $options = array_merge($defaultOptions, $options);
+
+        $gapicVersion = $options['libVersion'] ?: self::getGapicVersion();
+
+        $headerDescriptor = new AgentHeaderDescriptor([
+            'libName' => $options['libName'],
+            'libVersion' => $options['libVersion'],
+            'gapicVersion' => $gapicVersion,
+        ]);
+
+        $defaultDescriptors = ['headerDescriptor' => $headerDescriptor];
+        $this->descriptors = [
+            'createTable' => $defaultDescriptors,
+            'listTables' => $defaultDescriptors,
+            'getTable' => $defaultDescriptors,
+            'deleteTable' => $defaultDescriptors,
+            'modifyColumnFamilies' => $defaultDescriptors,
+            'dropRowRange' => $defaultDescriptors,
+        ];
+        $pageStreamingDescriptors = self::getPageStreamingDescriptors();
+        foreach ($pageStreamingDescriptors as $method => $pageStreamingDescriptor) {
+            $this->descriptors[$method]['pageStreamingDescriptor'] = $pageStreamingDescriptor;
+        }
+
+        $clientConfigJsonString = file_get_contents($options['clientConfigPath']);
+        $clientConfig = json_decode($clientConfigJsonString, true);
+        $this->defaultCallSettings =
+                CallSettings::load(
+                    'google.bigtable.admin.v2.BigtableTableAdmin',
+                    $clientConfig,
+                    $options['retryingOverride']
+                );
+
+        $this->scopes = $options['scopes'];
+
+        $createStubOptions = [];
+        if (array_key_exists('sslCreds', $options)) {
+            $createStubOptions['sslCreds'] = $options['sslCreds'];
+        }
+        $this->grpcCredentialsHelper = new GrpcCredentialsHelper($options);
+
+        $createBigtableTableAdminStubFunction = function ($hostname, $opts, $channel) {
+            return new BigtableTableAdminGrpcClient($hostname, $opts, $channel);
+        };
+        if (array_key_exists('createBigtableTableAdminStubFunction', $options)) {
+            $createBigtableTableAdminStubFunction = $options['createBigtableTableAdminStubFunction'];
+        }
+        $this->bigtableTableAdminStub = $this->grpcCredentialsHelper->createStub($createBigtableTableAdminStubFunction);
     }
 
     /**
@@ -444,8 +377,8 @@ class BigtableTableAdminGapicClient
      *
      * Sample code:
      * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
      * try {
+     *     $bigtableTableAdminClient = new BigtableTableAdminClient();
      *     $formattedParent = $bigtableTableAdminClient->instanceName('[PROJECT]', '[INSTANCE]');
      *     $tableId = '';
      *     $table = new Table();
@@ -463,7 +396,7 @@ class BigtableTableAdminGapicClient
      * @param array  $optionalArgs {
      *                             Optional.
      *
-     *     @type CreateTableRequest_Split[] $initialSplits
+     *     @type Split[] $initialSplits
      *          The optional list of row keys that will be used to initially split the
      *          table into several tablets (tablets are similar to HBase regions).
      *          Given two split keys, `s1` and `s2`, three tablets will be created,
@@ -480,16 +413,16 @@ class BigtableTableAdminGapicClient
      *              - Tablet 3 `[customer_1, customer_2) => {"customer_1"}.`
      *              - Tablet 4 `[customer_2, other)      => {"customer_2"}.`
      *              - Tablet 5 `[other, )                => {"other", "zz"}.`
-     *     @type RetrySettings|array $retrySettings
+     *     @type \Google\GAX\RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
+     *          {@see Google\GAX\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
+     *          {@see Google\GAX\RetrySettings} for example usage.
      * }
      *
-     * @return \Google\Cloud\Bigtable\Admin\V2\Table
+     * @return \Google\Bigtable\Admin\V2\Table
      *
-     * @throws ApiException if the remote call fails
+     * @throws \Google\GAX\ApiException if the remote call fails
      * @experimental
      */
     public function createTable($parent, $tableId, $table, $optionalArgs = [])
@@ -502,97 +435,24 @@ class BigtableTableAdminGapicClient
             $request->setInitialSplits($optionalArgs['initialSplits']);
         }
 
-        return $this->startCall(
+        $defaultCallSettings = $this->defaultCallSettings['createTable'];
+        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
+            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
+                $optionalArgs['retrySettings']
+            );
+        }
+        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
+        $callable = ApiCallable::createApiCall(
+            $this->bigtableTableAdminStub,
             'CreateTable',
-            Table::class,
-            $optionalArgs,
-            $request
-        )->wait();
-    }
+            $mergedSettings,
+            $this->descriptors['createTable']
+        );
 
-    /**
-     * This is a private alpha release of Cloud Bigtable snapshots. This feature
-     * is not currently available to most Cloud Bigtable customers. This feature
-     * might be changed in backward-incompatible ways and is not recommended for
-     * production use. It is not subject to any SLA or deprecation policy.
-     *
-     * Creates a new table from the specified snapshot. The target table must
-     * not exist. The snapshot and the table must be in the same instance.
-     *
-     * Sample code:
-     * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
-     * try {
-     *     $formattedParent = $bigtableTableAdminClient->instanceName('[PROJECT]', '[INSTANCE]');
-     *     $tableId = '';
-     *     $sourceSnapshot = '';
-     *     $operationResponse = $bigtableTableAdminClient->createTableFromSnapshot($formattedParent, $tableId, $sourceSnapshot);
-     *     $operationResponse->pollUntilComplete();
-     *     if ($operationResponse->operationSucceeded()) {
-     *       $result = $operationResponse->getResult();
-     *       // doSomethingWith($result)
-     *     } else {
-     *       $error = $operationResponse->getError();
-     *       // handleError($error)
-     *     }
-     *
-     *     // OR start the operation, keep the operation name, and resume later
-     *     $operationResponse = $bigtableTableAdminClient->createTableFromSnapshot($formattedParent, $tableId, $sourceSnapshot);
-     *     $operationName = $operationResponse->getName();
-     *     // ... do other work
-     *     $newOperationResponse = $bigtableTableAdminClient->resumeOperation($operationName, 'createTableFromSnapshot');
-     *     while (!$newOperationResponse->isDone()) {
-     *         // ... do other work
-     *         $newOperationResponse->reload();
-     *     }
-     *     if ($newOperationResponse->operationSucceeded()) {
-     *       $result = $newOperationResponse->getResult();
-     *       // doSomethingWith($result)
-     *     } else {
-     *       $error = $newOperationResponse->getError();
-     *       // handleError($error)
-     *     }
-     * } finally {
-     *     $bigtableTableAdminClient->close();
-     * }
-     * ```
-     *
-     * @param string $parent         The unique name of the instance in which to create the table.
-     *                               Values are of the form `projects/<project>/instances/<instance>`.
-     * @param string $tableId        The name by which the new table should be referred to within the parent
-     *                               instance, e.g., `foobar` rather than `<parent>/tables/foobar`.
-     * @param string $sourceSnapshot The unique name of the snapshot from which to restore the table. The
-     *                               snapshot and the table must be in the same instance.
-     *                               Values are of the form
-     *                               `projects/<project>/instances/<instance>/clusters/<cluster>/snapshots/<snapshot>`.
-     * @param array  $optionalArgs   {
-     *                               Optional.
-     *
-     *     @type RetrySettings|array $retrySettings
-     *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
-     *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
-     * }
-     *
-     * @return \Google\ApiCore\OperationResponse
-     *
-     * @throws ApiException if the remote call fails
-     * @experimental
-     */
-    public function createTableFromSnapshot($parent, $tableId, $sourceSnapshot, $optionalArgs = [])
-    {
-        $request = new CreateTableFromSnapshotRequest();
-        $request->setParent($parent);
-        $request->setTableId($tableId);
-        $request->setSourceSnapshot($sourceSnapshot);
-
-        return $this->startOperationsCall(
-            'CreateTableFromSnapshot',
-            $optionalArgs,
+        return $callable(
             $request,
-            $this->getOperationsClient()
-        )->wait();
+            [],
+            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
@@ -600,8 +460,8 @@ class BigtableTableAdminGapicClient
      *
      * Sample code:
      * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
      * try {
+     *     $bigtableTableAdminClient = new BigtableTableAdminClient();
      *     $formattedParent = $bigtableTableAdminClient->instanceName('[PROJECT]', '[INSTANCE]');
      *     // Iterate through all elements
      *     $pagedResponse = $bigtableTableAdminClient->listTables($formattedParent);
@@ -629,22 +489,22 @@ class BigtableTableAdminGapicClient
      *     @type int $view
      *          The view to be applied to the returned tables' fields.
      *          Defaults to `NAME_ONLY` if unspecified; no others are currently supported.
-     *          For allowed values, use constants defined on {@see \Google\Cloud\Bigtable\Admin\V2\Table_View}
+     *          For allowed values, use constants defined on {@see \Google\Bigtable\Admin\V2\Table_View}
      *     @type string $pageToken
      *          A page token is used to specify a page of values to be returned.
      *          If no page token is specified (the default), the first page
      *          of values will be returned. Any page token used here must have
      *          been generated by a previous call to the API.
-     *     @type RetrySettings|array $retrySettings
+     *     @type \Google\GAX\RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
+     *          {@see Google\GAX\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
+     *          {@see Google\GAX\RetrySettings} for example usage.
      * }
      *
-     * @return \Google\ApiCore\PagedListResponse
+     * @return \Google\GAX\PagedListResponse
      *
-     * @throws ApiException if the remote call fails
+     * @throws \Google\GAX\ApiException if the remote call fails
      * @experimental
      */
     public function listTables($parent, $optionalArgs = [])
@@ -658,12 +518,24 @@ class BigtableTableAdminGapicClient
             $request->setPageToken($optionalArgs['pageToken']);
         }
 
-        return $this->getPagedListResponse(
+        $defaultCallSettings = $this->defaultCallSettings['listTables'];
+        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
+            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
+                $optionalArgs['retrySettings']
+            );
+        }
+        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
+        $callable = ApiCallable::createApiCall(
+            $this->bigtableTableAdminStub,
             'ListTables',
-            $optionalArgs,
-            ListTablesResponse::class,
-            $request
+            $mergedSettings,
+            $this->descriptors['listTables']
         );
+
+        return $callable(
+            $request,
+            [],
+            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
@@ -671,8 +543,8 @@ class BigtableTableAdminGapicClient
      *
      * Sample code:
      * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
      * try {
+     *     $bigtableTableAdminClient = new BigtableTableAdminClient();
      *     $formattedName = $bigtableTableAdminClient->tableName('[PROJECT]', '[INSTANCE]', '[TABLE]');
      *     $response = $bigtableTableAdminClient->getTable($formattedName);
      * } finally {
@@ -689,17 +561,17 @@ class BigtableTableAdminGapicClient
      *     @type int $view
      *          The view to be applied to the returned table's fields.
      *          Defaults to `SCHEMA_VIEW` if unspecified.
-     *          For allowed values, use constants defined on {@see \Google\Cloud\Bigtable\Admin\V2\Table_View}
-     *     @type RetrySettings|array $retrySettings
+     *          For allowed values, use constants defined on {@see \Google\Bigtable\Admin\V2\Table_View}
+     *     @type \Google\GAX\RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
+     *          {@see Google\GAX\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
+     *          {@see Google\GAX\RetrySettings} for example usage.
      * }
      *
-     * @return \Google\Cloud\Bigtable\Admin\V2\Table
+     * @return \Google\Bigtable\Admin\V2\Table
      *
-     * @throws ApiException if the remote call fails
+     * @throws \Google\GAX\ApiException if the remote call fails
      * @experimental
      */
     public function getTable($name, $optionalArgs = [])
@@ -710,12 +582,24 @@ class BigtableTableAdminGapicClient
             $request->setView($optionalArgs['view']);
         }
 
-        return $this->startCall(
+        $defaultCallSettings = $this->defaultCallSettings['getTable'];
+        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
+            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
+                $optionalArgs['retrySettings']
+            );
+        }
+        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
+        $callable = ApiCallable::createApiCall(
+            $this->bigtableTableAdminStub,
             'GetTable',
-            Table::class,
-            $optionalArgs,
-            $request
-        )->wait();
+            $mergedSettings,
+            $this->descriptors['getTable']
+        );
+
+        return $callable(
+            $request,
+            [],
+            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
@@ -723,8 +607,8 @@ class BigtableTableAdminGapicClient
      *
      * Sample code:
      * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
      * try {
+     *     $bigtableTableAdminClient = new BigtableTableAdminClient();
      *     $formattedName = $bigtableTableAdminClient->tableName('[PROJECT]', '[INSTANCE]', '[TABLE]');
      *     $bigtableTableAdminClient->deleteTable($formattedName);
      * } finally {
@@ -738,14 +622,14 @@ class BigtableTableAdminGapicClient
      * @param array  $optionalArgs {
      *                             Optional.
      *
-     *     @type RetrySettings|array $retrySettings
+     *     @type \Google\GAX\RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
+     *          {@see Google\GAX\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
+     *          {@see Google\GAX\RetrySettings} for example usage.
      * }
      *
-     * @throws ApiException if the remote call fails
+     * @throws \Google\GAX\ApiException if the remote call fails
      * @experimental
      */
     public function deleteTable($name, $optionalArgs = [])
@@ -753,12 +637,24 @@ class BigtableTableAdminGapicClient
         $request = new DeleteTableRequest();
         $request->setName($name);
 
-        return $this->startCall(
+        $defaultCallSettings = $this->defaultCallSettings['deleteTable'];
+        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
+            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
+                $optionalArgs['retrySettings']
+            );
+        }
+        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
+        $callable = ApiCallable::createApiCall(
+            $this->bigtableTableAdminStub,
             'DeleteTable',
-            GPBEmpty::class,
-            $optionalArgs,
-            $request
-        )->wait();
+            $mergedSettings,
+            $this->descriptors['deleteTable']
+        );
+
+        return $callable(
+            $request,
+            [],
+            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
@@ -769,8 +665,8 @@ class BigtableTableAdminGapicClient
      *
      * Sample code:
      * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
      * try {
+     *     $bigtableTableAdminClient = new BigtableTableAdminClient();
      *     $formattedName = $bigtableTableAdminClient->tableName('[PROJECT]', '[INSTANCE]', '[TABLE]');
      *     $modifications = [];
      *     $response = $bigtableTableAdminClient->modifyColumnFamilies($formattedName, $modifications);
@@ -779,26 +675,26 @@ class BigtableTableAdminGapicClient
      * }
      * ```
      *
-     * @param string                                     $name          The unique name of the table whose families should be modified.
-     *                                                                  Values are of the form
-     *                                                                  `projects/<project>/instances/<instance>/tables/<table>`.
-     * @param ModifyColumnFamiliesRequest_Modification[] $modifications Modifications to be atomically applied to the specified table's families.
-     *                                                                  Entries are applied in order, meaning that earlier modifications can be
-     *                                                                  masked by later ones (in the case of repeated updates to the same family,
-     *                                                                  for example).
-     * @param array                                      $optionalArgs  {
-     *                                                                  Optional.
+     * @param string         $name          The unique name of the table whose families should be modified.
+     *                                      Values are of the form
+     *                                      `projects/<project>/instances/<instance>/tables/<table>`.
+     * @param Modification[] $modifications Modifications to be atomically applied to the specified table's families.
+     *                                      Entries are applied in order, meaning that earlier modifications can be
+     *                                      masked by later ones (in the case of repeated updates to the same family,
+     *                                      for example).
+     * @param array          $optionalArgs  {
+     *                                      Optional.
      *
-     *     @type RetrySettings|array $retrySettings
+     *     @type \Google\GAX\RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
+     *          {@see Google\GAX\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
+     *          {@see Google\GAX\RetrySettings} for example usage.
      * }
      *
-     * @return \Google\Cloud\Bigtable\Admin\V2\Table
+     * @return \Google\Bigtable\Admin\V2\Table
      *
-     * @throws ApiException if the remote call fails
+     * @throws \Google\GAX\ApiException if the remote call fails
      * @experimental
      */
     public function modifyColumnFamilies($name, $modifications, $optionalArgs = [])
@@ -807,12 +703,24 @@ class BigtableTableAdminGapicClient
         $request->setName($name);
         $request->setModifications($modifications);
 
-        return $this->startCall(
+        $defaultCallSettings = $this->defaultCallSettings['modifyColumnFamilies'];
+        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
+            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
+                $optionalArgs['retrySettings']
+            );
+        }
+        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
+        $callable = ApiCallable::createApiCall(
+            $this->bigtableTableAdminStub,
             'ModifyColumnFamilies',
-            Table::class,
-            $optionalArgs,
-            $request
-        )->wait();
+            $mergedSettings,
+            $this->descriptors['modifyColumnFamilies']
+        );
+
+        return $callable(
+            $request,
+            [],
+            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
@@ -822,8 +730,8 @@ class BigtableTableAdminGapicClient
      *
      * Sample code:
      * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
      * try {
+     *     $bigtableTableAdminClient = new BigtableTableAdminClient();
      *     $formattedName = $bigtableTableAdminClient->tableName('[PROJECT]', '[INSTANCE]', '[TABLE]');
      *     $bigtableTableAdminClient->dropRowRange($formattedName);
      * } finally {
@@ -842,14 +750,14 @@ class BigtableTableAdminGapicClient
      *          zero length.
      *     @type bool $deleteAllDataFromTable
      *          Delete all rows in the table. Setting this to false is a no-op.
-     *     @type RetrySettings|array $retrySettings
+     *     @type \Google\GAX\RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
+     *          {@see Google\GAX\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
+     *          {@see Google\GAX\RetrySettings} for example usage.
      * }
      *
-     * @throws ApiException if the remote call fails
+     * @throws \Google\GAX\ApiException if the remote call fails
      * @experimental
      */
     public function dropRowRange($name, $optionalArgs = [])
@@ -863,369 +771,39 @@ class BigtableTableAdminGapicClient
             $request->setDeleteAllDataFromTable($optionalArgs['deleteAllDataFromTable']);
         }
 
-        return $this->startCall(
+        $defaultCallSettings = $this->defaultCallSettings['dropRowRange'];
+        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
+            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
+                $optionalArgs['retrySettings']
+            );
+        }
+        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
+        $callable = ApiCallable::createApiCall(
+            $this->bigtableTableAdminStub,
             'DropRowRange',
-            GPBEmpty::class,
-            $optionalArgs,
-            $request
-        )->wait();
-    }
-
-    /**
-     * This is a private alpha release of Cloud Bigtable replication. This feature
-     * is not currently available to most Cloud Bigtable customers. This feature
-     * might be changed in backward-incompatible ways and is not recommended for
-     * production use. It is not subject to any SLA or deprecation policy.
-     *
-     * Generates a consistency token for a Table, which can be used in
-     * CheckConsistency to check whether mutations to the table that finished
-     * before this call started have been replicated. The tokens will be available
-     * for 90 days.
-     *
-     * Sample code:
-     * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
-     * try {
-     *     $formattedName = $bigtableTableAdminClient->tableName('[PROJECT]', '[INSTANCE]', '[TABLE]');
-     *     $response = $bigtableTableAdminClient->generateConsistencyToken($formattedName);
-     * } finally {
-     *     $bigtableTableAdminClient->close();
-     * }
-     * ```
-     *
-     * @param string $name         The unique name of the Table for which to create a consistency token.
-     *                             Values are of the form
-     *                             `projects/<project>/instances/<instance>/tables/<table>`.
-     * @param array  $optionalArgs {
-     *                             Optional.
-     *
-     *     @type RetrySettings|array $retrySettings
-     *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
-     *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
-     * }
-     *
-     * @return \Google\Cloud\Bigtable\Admin\V2\GenerateConsistencyTokenResponse
-     *
-     * @throws ApiException if the remote call fails
-     * @experimental
-     */
-    public function generateConsistencyToken($name, $optionalArgs = [])
-    {
-        $request = new GenerateConsistencyTokenRequest();
-        $request->setName($name);
-
-        return $this->startCall(
-            'GenerateConsistencyToken',
-            GenerateConsistencyTokenResponse::class,
-            $optionalArgs,
-            $request
-        )->wait();
-    }
-
-    /**
-     * This is a private alpha release of Cloud Bigtable replication. This feature
-     * is not currently available to most Cloud Bigtable customers. This feature
-     * might be changed in backward-incompatible ways and is not recommended for
-     * production use. It is not subject to any SLA or deprecation policy.
-     *
-     * Checks replication consistency based on a consistency token, that is, if
-     * replication has caught up based on the conditions specified in the token
-     * and the check request.
-     *
-     * Sample code:
-     * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
-     * try {
-     *     $formattedName = $bigtableTableAdminClient->tableName('[PROJECT]', '[INSTANCE]', '[TABLE]');
-     *     $consistencyToken = '';
-     *     $response = $bigtableTableAdminClient->checkConsistency($formattedName, $consistencyToken);
-     * } finally {
-     *     $bigtableTableAdminClient->close();
-     * }
-     * ```
-     *
-     * @param string $name             The unique name of the Table for which to check replication consistency.
-     *                                 Values are of the form
-     *                                 `projects/<project>/instances/<instance>/tables/<table>`.
-     * @param string $consistencyToken The token created using GenerateConsistencyToken for the Table.
-     * @param array  $optionalArgs     {
-     *                                 Optional.
-     *
-     *     @type RetrySettings|array $retrySettings
-     *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
-     *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
-     * }
-     *
-     * @return \Google\Cloud\Bigtable\Admin\V2\CheckConsistencyResponse
-     *
-     * @throws ApiException if the remote call fails
-     * @experimental
-     */
-    public function checkConsistency($name, $consistencyToken, $optionalArgs = [])
-    {
-        $request = new CheckConsistencyRequest();
-        $request->setName($name);
-        $request->setConsistencyToken($consistencyToken);
-
-        return $this->startCall(
-            'CheckConsistency',
-            CheckConsistencyResponse::class,
-            $optionalArgs,
-            $request
-        )->wait();
-    }
-
-    /**
-     * This is a private alpha release of Cloud Bigtable snapshots. This feature
-     * is not currently available to most Cloud Bigtable customers. This feature
-     * might be changed in backward-incompatible ways and is not recommended for
-     * production use. It is not subject to any SLA or deprecation policy.
-     *
-     * Creates a new snapshot in the specified cluster from the specified
-     * source table. The cluster and the table must be in the same instance.
-     *
-     * Sample code:
-     * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
-     * try {
-     *     $formattedName = $bigtableTableAdminClient->tableName('[PROJECT]', '[INSTANCE]', '[TABLE]');
-     *     $cluster = '';
-     *     $snapshotId = '';
-     *     $description = '';
-     *     $response = $bigtableTableAdminClient->snapshotTable($formattedName, $cluster, $snapshotId, $description);
-     * } finally {
-     *     $bigtableTableAdminClient->close();
-     * }
-     * ```
-     *
-     * @param string $name         The unique name of the table to have the snapshot taken.
-     *                             Values are of the form
-     *                             `projects/<project>/instances/<instance>/tables/<table>`.
-     * @param string $cluster      The name of the cluster where the snapshot will be created in.
-     *                             Values are of the form
-     *                             `projects/<project>/instances/<instance>/clusters/<cluster>`.
-     * @param string $snapshotId   The ID by which the new snapshot should be referred to within the parent
-     *                             cluster, e.g., `mysnapshot` of the form: `[_a-zA-Z0-9][-_.a-zA-Z0-9]*`
-     *                             rather than
-     *                             `projects/<project>/instances/<instance>/clusters/<cluster>/snapshots/mysnapshot`.
-     * @param string $description  Description of the snapshot.
-     * @param array  $optionalArgs {
-     *                             Optional.
-     *
-     *     @type Duration $ttl
-     *          The amount of time that the new snapshot can stay active after it is
-     *          created. Once 'ttl' expires, the snapshot will get deleted. The maximum
-     *          amount of time a snapshot can stay active is 7 days. If 'ttl' is not
-     *          specified, the default value of 24 hours will be used.
-     *     @type RetrySettings|array $retrySettings
-     *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
-     *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
-     * }
-     *
-     * @return \Google\LongRunning\Operation
-     *
-     * @throws ApiException if the remote call fails
-     * @experimental
-     */
-    public function snapshotTable($name, $cluster, $snapshotId, $description, $optionalArgs = [])
-    {
-        $request = new SnapshotTableRequest();
-        $request->setName($name);
-        $request->setCluster($cluster);
-        $request->setSnapshotId($snapshotId);
-        $request->setDescription($description);
-        if (isset($optionalArgs['ttl'])) {
-            $request->setTtl($optionalArgs['ttl']);
-        }
-
-        return $this->startCall(
-            'SnapshotTable',
-            Operation::class,
-            $optionalArgs,
-            $request
-        )->wait();
-    }
-
-    /**
-     * This is a private alpha release of Cloud Bigtable snapshots. This feature
-     * is not currently available to most Cloud Bigtable customers. This feature
-     * might be changed in backward-incompatible ways and is not recommended for
-     * production use. It is not subject to any SLA or deprecation policy.
-     *
-     * Gets metadata information about the specified snapshot.
-     *
-     * Sample code:
-     * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
-     * try {
-     *     $formattedName = $bigtableTableAdminClient->snapshotName('[PROJECT]', '[INSTANCE]', '[CLUSTER]', '[SNAPSHOT]');
-     *     $response = $bigtableTableAdminClient->getSnapshot($formattedName);
-     * } finally {
-     *     $bigtableTableAdminClient->close();
-     * }
-     * ```
-     *
-     * @param string $name         The unique name of the requested snapshot.
-     *                             Values are of the form
-     *                             `projects/<project>/instances/<instance>/clusters/<cluster>/snapshots/<snapshot>`.
-     * @param array  $optionalArgs {
-     *                             Optional.
-     *
-     *     @type RetrySettings|array $retrySettings
-     *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
-     *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
-     * }
-     *
-     * @return \Google\Cloud\Bigtable\Admin\V2\Snapshot
-     *
-     * @throws ApiException if the remote call fails
-     * @experimental
-     */
-    public function getSnapshot($name, $optionalArgs = [])
-    {
-        $request = new GetSnapshotRequest();
-        $request->setName($name);
-
-        return $this->startCall(
-            'GetSnapshot',
-            Snapshot::class,
-            $optionalArgs,
-            $request
-        )->wait();
-    }
-
-    /**
-     * This is a private alpha release of Cloud Bigtable snapshots. This feature
-     * is not currently available to most Cloud Bigtable customers. This feature
-     * might be changed in backward-incompatible ways and is not recommended for
-     * production use. It is not subject to any SLA or deprecation policy.
-     *
-     * Lists all snapshots associated with the specified cluster.
-     *
-     * Sample code:
-     * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
-     * try {
-     *     $formattedParent = $bigtableTableAdminClient->clusterName('[PROJECT]', '[INSTANCE]', '[CLUSTER]');
-     *     // Iterate through all elements
-     *     $pagedResponse = $bigtableTableAdminClient->listSnapshots($formattedParent);
-     *     foreach ($pagedResponse->iterateAllElements() as $element) {
-     *         // doSomethingWith($element);
-     *     }
-     *
-     *     // OR iterate over pages of elements
-     *     $pagedResponse = $bigtableTableAdminClient->listSnapshots($formattedParent);
-     *     foreach ($pagedResponse->iteratePages() as $page) {
-     *         foreach ($page as $element) {
-     *             // doSomethingWith($element);
-     *         }
-     *     }
-     * } finally {
-     *     $bigtableTableAdminClient->close();
-     * }
-     * ```
-     *
-     * @param string $parent       The unique name of the cluster for which snapshots should be listed.
-     *                             Values are of the form
-     *                             `projects/<project>/instances/<instance>/clusters/<cluster>`.
-     *                             Use `<cluster> = '-'` to list snapshots for all clusters in an instance,
-     *                             e.g., `projects/<project>/instances/<instance>/clusters/-`.
-     * @param array  $optionalArgs {
-     *                             Optional.
-     *
-     *     @type int $pageSize
-     *          The maximum number of resources contained in the underlying API
-     *          response. The API may return fewer values in a page, even if
-     *          there are additional values to be retrieved.
-     *     @type string $pageToken
-     *          A page token is used to specify a page of values to be returned.
-     *          If no page token is specified (the default), the first page
-     *          of values will be returned. Any page token used here must have
-     *          been generated by a previous call to the API.
-     *     @type RetrySettings|array $retrySettings
-     *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
-     *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
-     * }
-     *
-     * @return \Google\ApiCore\PagedListResponse
-     *
-     * @throws ApiException if the remote call fails
-     * @experimental
-     */
-    public function listSnapshots($parent, $optionalArgs = [])
-    {
-        $request = new ListSnapshotsRequest();
-        $request->setParent($parent);
-        if (isset($optionalArgs['pageSize'])) {
-            $request->setPageSize($optionalArgs['pageSize']);
-        }
-        if (isset($optionalArgs['pageToken'])) {
-            $request->setPageToken($optionalArgs['pageToken']);
-        }
-
-        return $this->getPagedListResponse(
-            'ListSnapshots',
-            $optionalArgs,
-            ListSnapshotsResponse::class,
-            $request
+            $mergedSettings,
+            $this->descriptors['dropRowRange']
         );
+
+        return $callable(
+            $request,
+            [],
+            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
-     * This is a private alpha release of Cloud Bigtable snapshots. This feature
-     * is not currently available to most Cloud Bigtable customers. This feature
-     * might be changed in backward-incompatible ways and is not recommended for
-     * production use. It is not subject to any SLA or deprecation policy.
+     * Initiates an orderly shutdown in which preexisting calls continue but new
+     * calls are immediately cancelled.
      *
-     * Permanently deletes the specified snapshot.
-     *
-     * Sample code:
-     * ```
-     * $bigtableTableAdminClient = new BigtableTableAdminClient();
-     * try {
-     *     $formattedName = $bigtableTableAdminClient->snapshotName('[PROJECT]', '[INSTANCE]', '[CLUSTER]', '[SNAPSHOT]');
-     *     $bigtableTableAdminClient->deleteSnapshot($formattedName);
-     * } finally {
-     *     $bigtableTableAdminClient->close();
-     * }
-     * ```
-     *
-     * @param string $name         The unique name of the snapshot to be deleted.
-     *                             Values are of the form
-     *                             `projects/<project>/instances/<instance>/clusters/<cluster>/snapshots/<snapshot>`.
-     * @param array  $optionalArgs {
-     *                             Optional.
-     *
-     *     @type RetrySettings|array $retrySettings
-     *          Retry settings to use for this call. Can be a
-     *          {@see Google\ApiCore\RetrySettings} object, or an associative array
-     *          of retry settings parameters. See the documentation on
-     *          {@see Google\ApiCore\RetrySettings} for example usage.
-     * }
-     *
-     * @throws ApiException if the remote call fails
      * @experimental
      */
-    public function deleteSnapshot($name, $optionalArgs = [])
+    public function close()
     {
-        $request = new DeleteSnapshotRequest();
-        $request->setName($name);
+        $this->bigtableTableAdminStub->close();
+    }
 
-        return $this->startCall(
-            'DeleteSnapshot',
-            GPBEmpty::class,
-            $optionalArgs,
-            $request
-        )->wait();
+    private function createCredentialsCallback()
+    {
+        return $this->grpcCredentialsHelper->createCallCredentialsCallback();
     }
 }

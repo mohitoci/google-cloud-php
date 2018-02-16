@@ -4,7 +4,7 @@
     "license": "Apache-2.0",
     "minimum-stability": "stable",
     "require": {
-        "google/proto-client": "^0.29",
+        "google/proto-client": "^0.26",
         "google/gax": "^0.26"
     },
     "suggest": {
