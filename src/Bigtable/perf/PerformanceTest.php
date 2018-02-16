@@ -169,7 +169,7 @@ class PerformanceTest {
 				$this->BigtableTable->mutateRow($table, $randomRowKey, [$mutationCell]);
 				$time_elapsed_secs = round(microtime(true)*1000)-$start;
 				$writeRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed_secs];
-				
+
 				$write_oprations_total_time += $time_elapsed_secs;
 				hdr_record_value($hdr_write, $time_elapsed_secs);
 			}
@@ -246,9 +246,6 @@ foreach ($argv as $val) {
 		if (count($val) > 1) {
 			$tableId = $val[1];
 		}
-	} else if (strpos($val, 'help') !== false) {
-		$txt = "--totalRows\t Total no. of rows to inserting \t totalRows >= batchSize \n\n--batchSize\t Defines that how many rows mutate at a time \t batchSize is > 0 and <10000 \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--timeoutMillis\t timeoutMillis for mutate rows \n\nEx. totalRows=10000 batchsize=1000 timeoutMinute=30 timeoutMillis=60000 \nNote. timeoutMillis are optional \n\n";
-		exit($txt);
 	} else if (strpos($val, 'totalRows') !== false) {
 		$val = explode('=', $val);
 		if (count($val) > 1 && is_int((int) $val[1])) {
