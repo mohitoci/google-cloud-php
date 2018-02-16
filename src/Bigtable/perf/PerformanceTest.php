@@ -167,22 +167,9 @@ class PerformanceTest {
 
 				$mutationCell = $this->BigtableTable->mutationCell($cell);
 				$this->BigtableTable->mutateRow($table, $randomRowKey, [$mutationCell]);
-				$row = $this->BigtableTable->readRows($table, [$randomRowKey]);
-
-				$flag  = false;
-				$cells = $row[0]->getCells();
-				foreach ($cells as $val) {
-					if ($val->getValue() == $value) {
-						$flag = true;
-						break;
-					}
-				}
 				$time_elapsed_secs = round(microtime(true)*1000)-$start;
-				if ($flag) {
-					$writeRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed_secs];
-				} else {
-					$writeRowsTotal['failure'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed_secs];
-				}
+				$writeRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed_secs];
+				
 				$write_oprations_total_time += $time_elapsed_secs;
 				hdr_record_value($hdr_write, $time_elapsed_secs);
 			}
