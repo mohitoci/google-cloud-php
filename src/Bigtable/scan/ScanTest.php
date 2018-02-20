@@ -140,7 +140,7 @@ class ScanTest
 }
 foreach ($argv as $val) {
 	if (strpos($val, 'help') !== false) {
-		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--tableId\t table name to perform operations \n\n--totalRows\t Total no. of rows to find random key \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--timeoutMillis\t timeoutMillis for mutate rows \n\nEx. totalRows=10000 batchsize=1000 timeoutMinute=30 timeoutMillis=60000 \nNote. timeoutMillis are optional \n\n";
+		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--tableId\t table name to perform operations \n\n--totalRows\t Total no. of rows to find random key \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--timeoutMillis\t timeoutMillis for mutate rows \n\nEx. php ScanTest.php projectId=grass-clump-479 instanceId=php-perf tableId=php-test totalRows=100000 timeoutMinute=30 \nNote. timeoutMillis are optional \n\n";
 		exit($txt);
 	} else if (strpos($val, 'projectId') !== false) {
 		$val = explode('=', $val);
