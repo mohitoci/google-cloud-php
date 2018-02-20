@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-require '../vendor/autoload.php';
-
+require_once __DIR__.'/../vendor/autoload.php';
+putenv('GOOGLE_APPLICATION_CREDENTIALS=../Grass_Clump_479-b5c624400920.json');
 use Google\Cloud\Bigtable\src\BigtableTable;
 use Google\Bigtable\V2\RowFilter;
 use Google\Bigtable\V2\RowSet;
+use Google\Bigtable\V2\RowRange;
 
 /**
  *
@@ -59,7 +60,8 @@ class ScanTest
 	 */
 	public function randomRead($tableId, $rowKey_pref, $cf, $option)
 	{
-		$total_row      = $option['totalRows'];
+		$total_row      = $option['totalRows']-1;
+		$rowLimit		= $option['limit'];
 		$readRowsTotal  = ['success' => [], 'failure' => []];
 
 		$hdr_read  = hdr_init(1, 3600000, 3);
@@ -78,17 +80,21 @@ class ScanTest
 		while ($currentTimestemp < $endTimestemp) {
 			$random = mt_rand(0, $total_row);
 			$randomRowKey = sprintf($rowKey_pref.'%07d', $random);
-			
+
+			$RowRange = new RowRange();
+			$RowRange->setStartKeyClosed($randomRowKey);
+
 			//Row set
 			$RowSet = new RowSet();
-			$RowSet->setRowKeys([$randomRowKey]);
-			
+			$RowSet->setRowRanges([$RowRange]);
+
 			//Row Filter
 			$RowFilter = new RowFilter();
 			$RowFilter->setCellsPerRowLimitFilter(1);
 
 			$optionalArg['rows'] = $RowSet;
 			$optionalArg['filter'] = $RowFilter;
+			$optionalArg['rowsLimit'] = $rowLimit;
 			$startAt = $this->currentMillies();
 			$res = $this->BigtableTable->readRows($tableId, $optionalArg);
 			$time_elapsed = $this->currentMillies() - $startAt;
@@ -140,7 +146,7 @@ class ScanTest
 }
 foreach ($argv as $val) {
 	if (strpos($val, 'help') !== false) {
-		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--tableId\t table name to perform operations \n\n--totalRows\t Total no. of rows to find random key \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--timeoutMillis\t timeoutMillis for mutate rows \n\nEx. php ScanTest.php projectId=grass-clump-479 instanceId=php-perf tableId=php-test totalRows=100000 timeoutMinute=30 \nNote. timeoutMillis are optional \n\n";
+		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--tableId\t table name to perform operations \n\n--totalRows\t Total no. of rows to find random key \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--limit\t\t read rows at a time \n\nEx. php ScanTest.php projectId=grass-clump-479 instanceId=php-perf tableId=php-test totalRows=1000000 timeoutMinute=30 limit=100\n\n";
 		exit($txt);
 	} else if (strpos($val, 'projectId') !== false) {
 		$val = explode('=', $val);
@@ -169,6 +175,11 @@ foreach ($argv as $val) {
 		if (count($val) > 1 && is_int((int) $val[1])) {
 			$timeoutMinute = (int) $val[1];
 		}
+	} else if (strpos($val, 'limit') !== false) {
+		$val = explode('=', $val);
+		if (count($val) > 1 && is_int((int) $val[1])) {
+			$limit = (int) $val[1];
+		}
 	}
 }
 
@@ -190,19 +201,19 @@ if (!isset($timeoutMinute)) {
 	exit("timeoutMinute is missing\n");
 }
 
-// $projectId  = "grass-clump-479";
-// $instanceId = "php-perf";
-// $table      = "perf-test";
-$args = ['projectId' => $projectId, 'instanceId' =>$instanceId];
+if (!isset($limit)) {
+	exit("limit is missing\n");
+}
 
-$rowKey_pref  = 'perf';
-$columnFamily = 'cf';
+$args = ['projectId' => $projectId, 'instanceId' =>$instanceId];
 $ScanTest = new ScanTest($args);
 
 //Random read row
-echo "\nRandom read rows operation";
+echo "\nRandom read rows operations for $limit rowKeys";
 $timeoutSec = $timeoutMinute * 60;
-$options        = ['totalRows' => $totalRows, 'timeoutSec' => $timeoutSec];
+$options    = ['totalRows' => $totalRows, 'timeoutSec' => $timeoutSec, 'limit' => $limit];
+$rowKey_pref  = 'perf';
+$columnFamily = 'cf';
 $statisticsData = $ScanTest->randomRead($tableId, $rowKey_pref, $columnFamily, $options);
 
 $info = array(
@@ -215,7 +226,7 @@ $info = array(
 	'',
 );
 
-$filepath = 'reports_latency_scan_test_'.date("h_i_s").'.csv';
+$filepath = "scan_test_for_".$limit."_At_".date("h_i_s").".csv";
 $fp       = fopen($filepath, "w");
 foreach ($info as $line) {
 	$val = explode(",", $line);
