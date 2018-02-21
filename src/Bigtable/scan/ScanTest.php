@@ -16,7 +16,7 @@
  */
 
 require_once __DIR__.'/../vendor/autoload.php';
-putenv('GOOGLE_APPLICATION_CREDENTIALS=../Grass_Clump_479-b5c624400920.json');
+
 use Google\Cloud\Bigtable\src\BigtableTable;
 use Google\Bigtable\V2\RowFilter;
 use Google\Bigtable\V2\RowSet;
@@ -147,7 +147,7 @@ class ScanTest
 
 foreach ($argv as $val) {
 	if (strpos($val, 'help') !== false) {
-		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--tableId\t table name to perform operations \n\n--totalRows\t Total no. of rows to find random key \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--limit\t\t read rows at a time \n\nEx. php ScanTest.php projectId=grass-clump-479 instanceId=php-perf tableId=php-test totalRows=1000000 timeoutMinute=30 limit=100\n\n";
+		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--tableId\t table name to perform operations \n\n--totalRows\t Total no. of rows to find random key \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--limit\t\t read rows at a time \n\nEx. php ScanTest.php projectId=grass-clump-479 instanceId=php-perf tableId=scantest totalRows=1000000 timeoutMinute=30 limit=100\n\n";
 		exit($txt);
 	} else if (strpos($val, 'projectId') !== false) {
 		$val = explode('=', $val);
