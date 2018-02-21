@@ -16,7 +16,7 @@
  */
 
 require_once __DIR__.'/../vendor/autoload.php';
-
+putenv('GOOGLE_APPLICATION_CREDENTIALS=../Grass_Clump_479-b5c624400920.json');
 use Google\Cloud\Bigtable\src\BigtableTable;
 use Google\Bigtable\V2\RowFilter;
 use Google\Bigtable\V2\RowSet;
@@ -70,7 +70,7 @@ class ScanTest
 		$read_oprations_total_time  = 0;
 
 		$startTime = date("h:i:s");
-		echo "\nRandom read start Time $startTime";
+		echo "\nStart Time $startTime";
 		$currentTimestemp = new DateTime($startTime);
 
 		$endTime      = date("h:i:s", time()+$option['timeoutSec']);//sec
@@ -107,7 +107,7 @@ class ScanTest
 			hdr_record_value($hdr_read, $time_elapsed);
 			$currentTimestemp = new DateTime(date("h:i:s"));
 		}
-		echo "\nRandom read rows operation complete\n";
+		echo "\noperation complete\n";
 		$total_runtime = $this->currentMillies() - $operation_start;
 		//Read operations
 		$min_read       = hdr_min($hdr_read);
@@ -116,7 +116,7 @@ class ScanTest
 		$totalReadTimeSec = $read_oprations_total_time/1000;
 		$readThroughput = round($total_read/$totalReadTimeSec, 4);
 		$statisticsData = [
-			'operation_name'     => 'Random Read',
+			'operation_name'     => 'Read',
 			'run_time'           => $read_oprations_total_time,
 			'mix_latency'        => $max_read/100,
 			'min_latency'        => $min_read/100,
@@ -144,6 +144,7 @@ class ScanTest
 		return round(microtime(true)*1000);
 	}
 }
+
 foreach ($argv as $val) {
 	if (strpos($val, 'help') !== false) {
 		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--tableId\t table name to perform operations \n\n--totalRows\t Total no. of rows to find random key \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--limit\t\t read rows at a time \n\nEx. php ScanTest.php projectId=grass-clump-479 instanceId=php-perf tableId=php-test totalRows=1000000 timeoutMinute=30 limit=100\n\n";
@@ -167,8 +168,6 @@ foreach ($argv as $val) {
 		$val = explode('=', $val);
 		if (count($val) > 1 && is_int((int) $val[1])) {
 			$totalRows = (int) $val[1];
-		} else {
-			exit("totalRows is integer and >= batchSize\n");
 		}
 	} else if (strpos($val, 'timeoutMinute') !== false) {
 		$val = explode('=', $val);
@@ -208,14 +207,15 @@ if (!isset($limit)) {
 $args = ['projectId' => $projectId, 'instanceId' =>$instanceId];
 $ScanTest = new ScanTest($args);
 
-//Random read row
-echo "\nRandom read rows operations for $limit rowKeys";
+/*********  Read rows *************/
+echo "\nScan test operations for $limit rowKeys";
 $timeoutSec = $timeoutMinute * 60;
 $options    = ['totalRows' => $totalRows, 'timeoutSec' => $timeoutSec, 'limit' => $limit];
 $rowKey_pref  = 'perf';
 $columnFamily = 'cf';
 $statisticsData = $ScanTest->randomRead($tableId, $rowKey_pref, $columnFamily, $options);
 
+/*********  Write csv file *************/
 $info = array(
 	'Platform,Linux',
 	'PHP,v7.0',
@@ -226,16 +226,38 @@ $info = array(
 	'',
 );
 
-$filepath = "scan_test_for_".$limit."_At_".date("h_i_s").".csv";
+$filepath = 'scan_test_for_'.$limit.'_At_'.date("m_d_Y_h_i_s").'.csv';
 $fp       = fopen($filepath, "w");
 foreach ($info as $line) {
 	$val = explode(",", $line);
 	fputcsv($fp, $val);
 }
-$header = ['Operation Name', 'Run Time', 'Max Latency', 'Min Latency', 'Operations', 'Throughput', 'p50 Latency', 'p75 Latency', 'p90 Latency', 'p95 Latency', 'p99 Latency', 'p99.99 Latency', 'Success Operations', 'Failed Operations'];
-fputcsv($fp, $header);
-fputcsv($fp, $statisticsData);
+$header = [
+	'operation_name'     => 'Operation Name',
+	'run_time'           => 'Run Time',
+	'mix_latency'        => 'Max Latency',
+	'min_latency'        => 'Min Latency',
+	'oprations'          => 'Operations',
+	'throughput'         => 'Throughput',
+	'p50_latency'        => 'p50 Latency',
+	'p75_latency'        => 'p75 Latency',
+	'p90_latency'        => 'p90 Latency',
+	'p95_latency'        => 'p95 Latency',
+	'p99_latency'        => 'p99 Latency',
+	'p99.99_latency'     => 'p99.99 Latency',
+	'success_operations' => 'Success Operations',
+	'failed_operations'  => 'Failed Operations'
+];
+fputcsv($fp, array_values($header));
+fputcsv($fp, array_values($statisticsData));
 fclose($fp);
 
 echo "\nFile generated ".$filepath;
+echo "\n----------------------------------------------------------------\n";
+
+/*********  Printing stats *************/
+foreach($header as $key => $val){
+	echo "$val : ".$statisticsData[$key];
+	echo "\n";
+}
 echo "\n";

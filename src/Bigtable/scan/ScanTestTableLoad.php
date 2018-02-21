@@ -24,7 +24,7 @@ use Google\Bigtable\V2\RowSet;
 /**
  * 
  */
-class PerformanceTest
+class ScanTestTableLoad
 {
 	private $BigtableTable;
 	private $randomValues;
@@ -50,13 +50,12 @@ class PerformanceTest
 	/**
      * Create Table
      *
+     * @param string $tableId
+     *
      * @param string $columnFamily
      */
-	public function createTable($columnFamily)
+	public function createTable($tableId, $columnFamily)
 	{
-		$length = 8;
-		$tableId = "perf".substr(str_shuffle(str_repeat($x = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', ceil($length/strlen($x)))), 1, $length);
-		echo "Creating table  $tableId\n";
 		try{
 			$this->BigtableTable->getTable($tableId);
 		}
@@ -66,17 +65,6 @@ class PerformanceTest
 				$this->BigtableTable->createTableWithColumnFamily($tableId, $columnFamily);
 			}
 		}
-		return $tableId;
-	}
-
-	/**
-     * Delete Table
-     *
-     * @param string $tableId
-     */
-	public function deleteTable($tableId)
-	{
-		$this->BigtableTable->deleteTable($tableId);
 	}
 
 	/**
@@ -169,7 +157,7 @@ class PerformanceTest
 		$totalSec      = $total_time_elapsed / 1000;
 		$throughput    = round($total/$totalSec, 4);
 		$statesticData = [
-			'operation_name'     => 'Data Load',
+			'operation_name'     => "Load ($batch_size Batch)",
 			'run_time'           => $total_time_elapsed,
 			'mix_latency'        => $max/100,
 			'min_latency'        => $min/100,
@@ -186,135 +174,11 @@ class PerformanceTest
 		];
 		return $statesticData;
 	}
-
-	/**
-	 * random read write row
-	 *
-	 * @param string $tableId
-	 * 
-	 * @param string $rowKey_pref   ex. perf
-	 * 
-	 * @param string $cf   			column family name
-	 * 
-	 * @param array  option{
-	 * 
-	 *     @param int $total_row
-	 *     @param int $timeoutsec
-	 *
-	 * @return array
-	 */
-	public function randomReadWrite($tableId, $rowKey_pref, $cf, $option)
-	{
-		$total_row      = $option['total_row']-1;
-		$readRowsTotal  = ['success' => [], 'failure' => []];
-		$writeRowsTotal = ['success' => [], 'failure' => []];
-
-		$hdr_read  = hdr_init(1, 3600000, 3);
-		$hdr_write = hdr_init(1, 3600000, 3);
-
-		$operation_start            = $this->milliSec();
-		$read_oprations_total_time  = 0;
-		$write_oprations_total_time = 0;
-
-		$startTime = date("h:i:s");
-		echo "\nRandom read write process start Time $startTime";
-		$currentTimestemp = new DateTime($startTime);
-
-		$endTime      = date(" h:i:s", time()+$option['timeoutsec']);//sec
-		$endTimestemp = new DateTime($endTime);
-		echo "\nProcess will terminate after $endTime";
-		echo "\nPlease wait ...";
-		$i = 0;
-		while ($currentTimestemp < $endTimestemp) {
-			$random       = mt_rand(0, $total_row);
-			$randomRowKey = sprintf($rowKey_pref.'%07d', $random);
-
-			//Row set
-			$RowSet = new RowSet();
-			$RowSet->setRowKeys([$randomRowKey]);
-			$optionalArg['rows'] = $RowSet;
-			if ($i%2 == 0) {
-				$startAt = $this->milliSec();
-				$res = $this->BigtableTable->readRows($tableId, $optionalArg);
-				$time_elapsed = $this->milliSec() - $startAt;
-				if (count($res)) {
-					$readRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
-				} else {
-					$readRowsTotal['failure'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
-				}
-				$read_oprations_total_time += $time_elapsed;
-				hdr_record_value($hdr_read, $time_elapsed);
-			} else {
-				$value             = $this->randomValues[mt_rand(1, $this->randomTotal)];
-				$cell['cf']        = $cf;//Specify column name, without column familly not updating row
-				$cell['value']     = $value;
-				$cell['qualifier'] = 'field0';//Specify qualifier (optional)
-
-				$mutationCell = $this->BigtableTable->mutationCell($cell);
-				$startAt = $this->milliSec();
-				$this->BigtableTable->mutateRow($tableId, $randomRowKey, [$mutationCell]);
-				$time_elapsed = $this->milliSec() - $startAt;
-				$writeRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
-				$write_oprations_total_time += $time_elapsed;
-				hdr_record_value($hdr_write, $time_elapsed);
-			}
-			$i++;
-			$currentTimestemp = new DateTime(date("h:i:s"));
-		}
-		$total_runtime = $this->milliSec() - $operation_start;
-		
-		//Read operations
-		$min_read       = hdr_min($hdr_read);
-		$max_read       = hdr_max($hdr_read);
-		$total_read     = count($readRowsTotal['success'])+count($readRowsTotal['failure']);
-		$totalReadTimeSec = $read_oprations_total_time/1000;
-		$readThroughput = round($total_read/$totalReadTimeSec, 4);
-		$readOperations = [
-			'operation_name'     => 'Random Read',
-			'run_time'           => $read_oprations_total_time,
-			'mix_latency'        => $max_read/100,
-			'min_latency'        => $min_read/100,
-			'oprations'          => $total_read,
-			'throughput'         => $readThroughput,
-			'p50_latency'        => hdr_value_at_percentile($hdr_read, 50),
-			'p75_latency'        => hdr_value_at_percentile($hdr_read, 75),
-			'p90_latency'        => hdr_value_at_percentile($hdr_read, 90),
-			'p95_latency'        => hdr_value_at_percentile($hdr_read, 95),
-			'p99_latency'        => hdr_value_at_percentile($hdr_read, 99),
-			'p99.99_latency'     => hdr_value_at_percentile($hdr_read, 99.99),
-			'success_operations' => count($readRowsTotal['success']),
-			'failed_operations'  => count($readRowsTotal['failure'])
-		];
-
-		//Write Operations
-		$min_write       = hdr_min($hdr_write);
-		$max_write       = hdr_max($hdr_write);
-		$total_write     = count($writeRowsTotal['success'])+count($writeRowsTotal['failure']);
-		$totalWriteTimeSec = $write_oprations_total_time/1000;
-		$writeThroughput = round($total_write/$totalWriteTimeSec, 4);
-		$writeOperations = [
-			'operation_name'     => 'Random Write',
-			'run_time'           => $write_oprations_total_time,
-			'mix_latency'        => $max_write/100,
-			'min_latency'        => $min_write/100,
-			'oprations'          => $total_write,
-			'throughput'         => $writeThroughput,
-			'p50_latency'        => hdr_value_at_percentile($hdr_write, 50),
-			'p75_latency'        => hdr_value_at_percentile($hdr_write, 75),
-			'p90_latency'        => hdr_value_at_percentile($hdr_write, 90),
-			'p95_latency'        => hdr_value_at_percentile($hdr_write, 95),
-			'p99_latency'        => hdr_value_at_percentile($hdr_write, 99),
-			'p99.99_latency'     => hdr_value_at_percentile($hdr_write, 99.99),
-			'success_operations' => count($writeRowsTotal['success']),
-			'failed_operations'  => count($writeRowsTotal['failure'])
-		];
-		return (['readOperations' => $readOperations, 'writeOperations' => $writeOperations]);
-	}
 }
 
 foreach ($argv as $val) {
 	if (strpos($val, 'help') !== false) {
-		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--totalRows\t Total no. of rows to inserting \t totalRows >= batchSize \n\n--batchSize\t Defines that how many rows mutate at a time \t batchSize is > 0 and <10000 \n\n--timeoutMinute\t random read write rows load till defined timeoutMinute \n\n--timeoutMillis\t timeoutMillis for mutate rows \n\nEx. php PerformanceTest.php projectId=grass-clump-479 instanceId=php-perf tableId=php-test totalRows=10000 batchSize=1000 timeoutMinute=30 \nNote. timeoutMillis are optional \n\n";
+		$txt = "--projectId\t projectId \n\n--instanceId\t instanceId \n\n--tableId\t table name to perform operations \n\n--totalRows\t Total no. of rows to inserting \t totalRows >= batchSize \n\n--batchSize\t Defines that how many rows mutate at a time \t batchSize is > 0 and <10000 \n\n--timeoutMillis\t timeoutMillis for mutate rows \n\nEx. php ScanTestLoad.php projectId=grass-clump-479 instanceId=php-perf tableId=php-test totalRows=10000000 batchSize=1000 \nNote. timeoutMillis are optional \n\n";
 		exit($txt);
 	} else if (strpos($val, 'projectId') !== false) {
 		$val = explode('=', $val);
@@ -325,6 +189,11 @@ foreach ($argv as $val) {
 		$val = explode('=', $val);
 		if (count($val) > 1) {
 			$instanceId = $val[1];
+		}
+	} else if (strpos($val, 'tableId') !== false) {
+		$val = explode('=', $val);
+		if (count($val) > 1) {
+			$tableId = $val[1];
 		}
 	} else if (strpos($val, 'totalRows') !== false) {
 		$val = explode('=', $val);
@@ -345,13 +214,6 @@ foreach ($argv as $val) {
 		if (count($val) > 1 && is_int((int) $val[1])) {
 			$timeoutMillis = (int) $val[1];
 		}
-	} else if (strpos($val, 'timeoutMinute') !== false) {
-		$val = explode('=', $val);
-		if (count($val) >= 1 && is_int((int) $val[1])) {
-			$minute = (int) $val[1];
-		} else {
-			exit("timeoutMinute is >= 1\n");
-		}
 	}
 }
 
@@ -360,6 +222,9 @@ if (!isset($projectId)) {
 }
 if (!isset($instanceId)) {
 	exit("instanceId is missing\n");
+}
+if (!isset($tableId)) {
+	exit("tableId is missing\n");
 }
 
 if (!isset($totalRows)) {
@@ -370,16 +235,13 @@ if (!isset($batchSize)) {
 	exit("batchSize is missing\n");
 }
 
-if (!isset($minute)) {
-	exit("timeoutMinute is missing\n");
-}
-
 $args = ['projectId' => $projectId, 'instanceId' =>$instanceId];
-$PerformanceTest = new PerformanceTest($args);
+$scanTest = new ScanTestTableLoad($args);
 
 /*********  Creating table *************/
+echo "Creating table  $tableId \n";
 $columnFamily = 'cf';
-$tableId = $PerformanceTest->createTable($columnFamily);
+$scanTest->createTable($tableId, $columnFamily);
 
 /*********  Loading rows *************/
 $rowKey_pref  = 'perf';
@@ -388,14 +250,7 @@ if (isset($timeoutMillis)) {
 	$options['timeoutMillis'] = $timeoutMillis;
 }
 echo "\n$totalRows rows loading ... \n";
-$inserted = $PerformanceTest->loadRecord($tableId, $rowKey_pref, $columnFamily, $options);
-
-/*********  Random read write *************/
-echo "\nLoad phase completed starting random read write phase";
-$timeoutsec      = $minute *60;//sec
-$options         = ['total_row' => $totalRows, 'timeoutsec' => $timeoutsec];
-$randomReadWrite = $PerformanceTest->randomReadWrite($tableId, $rowKey_pref, $columnFamily, $options);
-echo "\nRandom read write phase completed\n";
+$reportData = $scanTest->loadRecord($tableId, $rowKey_pref, $columnFamily, $options);
 
 /*********  Write csv file *************/
 $info = array(
@@ -408,7 +263,7 @@ $info = array(
 	'',
 );
 
-$filepath = 'reports_latency_test_At_'.date("m_d_Y_h_i_s").'.csv';
+$filepath = 'scantest_table_load_At_'.date("m_d_Y_h_i_s").'.csv';
 
 $fp       = fopen($filepath, "w");
 foreach ($info as $line) {
@@ -433,9 +288,7 @@ $header = [
 	'failed_operations'  => 'Failed Operations'
 ];
 fputcsv($fp, array_values($header));
-fputcsv($fp, array_values($inserted));
-fputcsv($fp, array_values($randomReadWrite['readOperations']));
-fputcsv($fp, array_values($randomReadWrite['writeOperations']));
+fputcsv($fp, array_values($reportData));
 fclose($fp);
 
 echo "\nFile generated ".$filepath;
@@ -443,23 +296,7 @@ echo "\n----------------------------------------------------------------\n";
 
 /*********  Printing stats *************/
 foreach($header as $key => $val){
-	echo "$val : ".$inserted[$key];
+	echo "$val : ".$reportData[$key];
 	echo "\n";
 }
-echo "\n";
-
-foreach($header as $key => $val){
-	echo "$val : ".$randomReadWrite['readOperations'][$key];
-	echo "\n";
-}
-echo "\n";
-
-foreach($header as $key => $val){
-	echo "$val : ".$randomReadWrite['writeOperations'][$key];
-	echo "\n";
-}
-
-/*********  Delete table *************/
-echo "\nDeleting table : $tableId";
-$PerformanceTest->deleteTable($tableId);
 echo "\n";
