@@ -215,11 +215,11 @@ class PerformanceTest
 		$read_oprations_total_time  = 0;
 		$write_oprations_total_time = 0;
 
-		$startTime = date("h:i:s");
+		$startTime = date("m/d/y h:i:s");
 		echo "\nRandom read write process start Time $startTime";
 		$currentTimestemp = new DateTime($startTime);
 
-		$endTime      = date(" h:i:s", time()+$option['timeoutsec']);//sec
+		$endTime      = date("m/d/y h:i:s", time()+$option['timeoutsec']);//sec
 		$endTimestemp = new DateTime($endTime);
 		echo "\nProcess will terminate after $endTime";
 		echo "\nPlease wait ...";
