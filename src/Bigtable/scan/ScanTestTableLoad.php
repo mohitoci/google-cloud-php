@@ -17,30 +17,45 @@
 
 require_once __DIR__.'/../vendor/autoload.php';
 
-use Google\Cloud\Bigtable\src\BigtableTable;
+use Google\Cloud\Bigtable\Table;
 use Google\Bigtable\V2\RowSet;
 
 /**
- * 
+ * Scan test for load 10M rows
  */
 class ScanTestTableLoad
 {
-	private $BigtableTable;
+	/**
+	 * @var \Google\Cloud\Bigtable\Table
+	 */
+	private $table;
+
+	/**
+     * @var array
+     */
 	private $randomValues;
+
+	/**
+     * @var integer
+     */
 	private $randomTotal = 1000;
 
 	/**
-     * Constructor.
-     * @param array $args {
+     * Config table Client.
+     *
+	 * Create random value 100 byte string and store into randomValues array
+	 * 
+     * @param array $config {
+     *      Configuration Options.
      *
      *     @param string $projectId
      *
      *     @param string $instanceId
      */
-	function __construct($args)
+	function __construct($config)
 	{
-		$this->BigtableTable = new BigtableTable($args);
-		$length              = 100;
+		$this->table = new table($config);
+		$length      = 100;
 		for ($i = 1; $i <= $this->randomTotal; $i++) {
 			$this->randomValues[$i] = substr(str_shuffle(str_repeat($x = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', ceil($length/strlen($x)))), 1, $length);
 		}
@@ -56,12 +71,12 @@ class ScanTestTableLoad
 	public function createTable($tableId, $columnFamily)
 	{
 		try{
-			$this->BigtableTable->getTable($tableId);
+			$this->table->getTable($tableId);
 		}
 		catch(Exception $e){
 			$error = json_decode($e->getMessage() );
 			if($error->status == 'NOT_FOUND'){
-				$this->BigtableTable->createTableWithColumnFamily($tableId, $columnFamily);
+				$this->table->createTableWithColumnFamily($tableId, $columnFamily);
 			}
 		}
 	}
@@ -122,15 +137,15 @@ class ScanTestTableLoad
 					$cell['qualifier'] = 'field'.$i;
 					$cell['value']     = $value;
 					$cell['timestamp'] = $utc*1000;
-					$MutationArray[$i] = $this->BigtableTable->mutationCell($cell);
+					$MutationArray[$i] = $this->table->mutationCell($cell);
 				}
 				// setMutations
-				$entries[$index] = $this->BigtableTable->mutateRowsRequest($rowKey, $MutationArray);
+				$entries[$index] = $this->table->mutateRowsRequest($rowKey, $MutationArray);
 				$index++;
 			}
 
 			$startTime    = $this->milliSec();
-			$ServerStream = $this->BigtableTable->mutateRows($tableId, $entries, $optionalArgs);
+			$ServerStream = $this->table->mutateRows($tableId, $entries, $optionalArgs);
 			$current      = $ServerStream->readAll()->current();
 			$Entries      = $current->getEntries();
 			foreach ($Entries->getIterator() as $Iterator) {

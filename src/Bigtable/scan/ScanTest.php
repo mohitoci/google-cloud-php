@@ -17,7 +17,7 @@
 
 require_once __DIR__.'/../vendor/autoload.php';
 
-use Google\Cloud\Bigtable\src\BigtableTable;
+use Google\Cloud\Bigtable\Table;
 use Google\Bigtable\V2\RowFilter;
 use Google\Bigtable\V2\RowSet;
 use Google\Bigtable\V2\RowRange;
@@ -27,19 +27,26 @@ use Google\Bigtable\V2\RowRange;
  */
 class ScanTest
 {
-	private $BigtableTable;
+	/**
+	 * @var \Google\Cloud\Bigtable\Table
+	 */
+	private $table;
 
 	/**
-     * Constructor.
-     * @param array $args {
+     * Config table Client.
+     *
+	 * Create random value 100 byte string and store into randomValues array
+	 * 
+     * @param array $config {
+     *      Configuration Options.
      *
      *     @param string $projectId
      *
      *     @param string $instanceId
      */
-	function __construct($args)
+	function __construct($config)
 	{
-		$this->BigtableTable = new BigtableTable($args);
+		$this->table = new table($config);
 	}
 
 	/**
@@ -62,7 +69,7 @@ class ScanTest
 	{
 		$total_row      = $option['totalRows']-1;
 		$rowLimit		= $option['limit'];
-		$readRowsTotal  = ['success' => [], 'failure' => []];
+		$readRowsTotal  = ['success' => 0, 'failure' => 0];
 
 		$hdr_read  = hdr_init(1, 3600000, 3);
 
@@ -96,12 +103,12 @@ class ScanTest
 			$optionalArg['filter'] = $RowFilter;
 			$optionalArg['rowsLimit'] = $rowLimit;
 			$startAt = $this->currentMillies();
-			$res = $this->BigtableTable->readRows($tableId, $optionalArg);
+			$res = $this->table->readRows($tableId, $optionalArg);
 			$time_elapsed = $this->currentMillies() - $startAt;
 			if (count($res)) {
-				$readRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
+				$readRowsTotal['success']++;
 			} else {
-				$readRowsTotal['failure'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
+				$readRowsTotal['failure']++;
 			}
 			$read_oprations_total_time += $time_elapsed;
 			hdr_record_value($hdr_read, $time_elapsed);
@@ -112,7 +119,7 @@ class ScanTest
 		//Read operations
 		$min_read       = hdr_min($hdr_read);
 		$max_read       = hdr_max($hdr_read);
-		$total_read     = count($readRowsTotal['success'])+count($readRowsTotal['failure']);
+		$total_read     = $readRowsTotal['success'] + $readRowsTotal['failure'];
 		$totalReadTimeSec = $read_oprations_total_time/1000;
 		$readThroughput = round($total_read/$totalReadTimeSec, 4);
 		$statisticsData = [
@@ -128,8 +135,8 @@ class ScanTest
 			'p95_latency'        => hdr_value_at_percentile($hdr_read, 95),
 			'p99_latency'        => hdr_value_at_percentile($hdr_read, 99),
 			'p99.99_latency'     => hdr_value_at_percentile($hdr_read, 99.99),
-			'success_operations' => count($readRowsTotal['success']),
-			'failed_operations'  => count($readRowsTotal['failure'])
+			'success_operations' => $readRowsTotal['success'],
+			'failed_operations'  => $readRowsTotal['failure']
 		];
 		return $statisticsData;
 	}

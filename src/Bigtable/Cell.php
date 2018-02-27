@@ -15,10 +15,10 @@
  * limitations under the License.
  */
 
-namespace Google\Cloud\Bigtable\V2;
+namespace Google\Cloud\Bigtable;
 
 /**
-*
+* Set and get cell value
 */
 class Cell
 {

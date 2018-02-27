@@ -17,29 +17,45 @@
 
 require_once __DIR__.'/../vendor/autoload.php';
 
-use Google\Cloud\Bigtable\src\BigtableTable;
+use Google\Cloud\Bigtable\Table;
 use Google\Bigtable\V2\RowSet;
 
 /**
+ * Performance test for load rows and random read write
  * 
  */
 class PerformanceTest
 {
-	private $BigtableTable;
+	/**
+	 * @var \Google\Cloud\Bigtable\Table
+	 */
+	private $table;
+
+	/**
+     * @var array
+     */
 	private $randomValues;
+
+	/**
+     * @var integer
+     */
 	private $randomTotal = 1000;
 
 	/**
-     * Constructor.
-     * @param array $args {
+     * Config table Client.
+     *
+	 * Create random value 100 byte string and store into randomValues array
+	 * 
+     * @param array $config {
+     *      Configuration Options.
      *
      *     @param string $projectId
      *
      *     @param string $instanceId
      */
-	function __construct($args)
+	function __construct($config)
 	{
-		$this->BigtableTable = new BigtableTable($args);
+		$this->table = new table($config);
 		$length              = 100;
 		for ($i = 1; $i <= $this->randomTotal; $i++) {
 			$this->randomValues[$i] = substr(str_shuffle(str_repeat($x = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', ceil($length/strlen($x)))), 1, $length);
@@ -47,7 +63,7 @@ class PerformanceTest
 	}
 
 	/**
-     * Create Table
+     * Create table perf{8 Random string}
      *
      * @param string $columnFamily
      */
@@ -57,12 +73,12 @@ class PerformanceTest
 		$tableId = "perf".substr(str_shuffle(str_repeat($x = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', ceil($length/strlen($x)))), 1, $length);
 		echo "Creating table  $tableId\n";
 		try{
-			$this->BigtableTable->getTable($tableId);
+			$this->table->getTable($tableId);
 		}
 		catch(Exception $e){
 			$error = json_decode($e->getMessage() );
 			if($error->status == 'NOT_FOUND'){
-				$this->BigtableTable->createTableWithColumnFamily($tableId, $columnFamily);
+				$this->table->createTableWithColumnFamily($tableId, $columnFamily);
 			}
 		}
 		return $tableId;
@@ -75,7 +91,7 @@ class PerformanceTest
      */
 	public function deleteTable($tableId)
 	{
-		$this->BigtableTable->deleteTable($tableId);
+		$this->table->deleteTable($tableId);
 	}
 
 	/**
@@ -134,15 +150,15 @@ class PerformanceTest
 					$cell['qualifier'] = 'field'.$i;
 					$cell['value']     = $value;
 					$cell['timestamp'] = $utc*1000;
-					$MutationArray[$i] = $this->BigtableTable->mutationCell($cell);
+					$MutationArray[$i] = $this->table->mutationCell($cell);
 				}
 				// setMutations
-				$entries[$index] = $this->BigtableTable->mutateRowsRequest($rowKey, $MutationArray);
+				$entries[$index] = $this->table->mutateRowsRequest($rowKey, $MutationArray);
 				$index++;
 			}
 
 			$startTime    = $this->milliSec();
-			$ServerStream = $this->BigtableTable->mutateRows($tableId, $entries, $optionalArgs);
+			$ServerStream = $this->table->mutateRows($tableId, $entries, $optionalArgs);
 			$current      = $ServerStream->readAll()->current();
 			$Entries      = $current->getEntries();
 			foreach ($Entries->getIterator() as $Iterator) {
@@ -190,11 +206,11 @@ class PerformanceTest
 	 * random read write row
 	 *
 	 * @param string $tableId
-	 * 
+	 *
 	 * @param string $rowKey_pref   ex. perf
-	 * 
+	 *
 	 * @param string $cf   			column family name
-	 * 
+	 *
 	 * @param array  option{
 	 * 
 	 *     @param int $total_row
@@ -205,8 +221,8 @@ class PerformanceTest
 	public function randomReadWrite($tableId, $rowKey_pref, $cf, $option)
 	{
 		$total_row      = $option['total_row']-1;
-		$readRowsTotal  = ['success' => [], 'failure' => []];
-		$writeRowsTotal = ['success' => [], 'failure' => []];
+		$readRowsTotal  = ['success' => 0, 'failure' => 0];
+		$writeRowsTotal = ['success' => 0, 'failure' => 0];
 
 		$hdr_read  = hdr_init(1, 3600000, 3);
 		$hdr_write = hdr_init(1, 3600000, 3);
@@ -228,18 +244,19 @@ class PerformanceTest
 			$random       = mt_rand(0, $total_row);
 			$randomRowKey = sprintf($rowKey_pref.'%07d', $random);
 
-			//Row set
-			$RowSet = new RowSet();
-			$RowSet->setRowKeys([$randomRowKey]);
-			$optionalArg['rows'] = $RowSet;
 			if ($i%2 == 0) {
+				//Row set
+				$RowSet = new RowSet();
+				$RowSet->setRowKeys([$randomRowKey]);
+				$optionalArg['rows'] = $RowSet;
+
 				$startAt = $this->milliSec();
-				$res = $this->BigtableTable->readRows($tableId, $optionalArg);
+				$res = $this->table->readRows($tableId, $optionalArg);
 				$time_elapsed = $this->milliSec() - $startAt;
 				if (count($res)) {
-					$readRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
+					$readRowsTotal['success']++;
 				} else {
-					$readRowsTotal['failure'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
+					$readRowsTotal['failure']++;
 				}
 				$read_oprations_total_time += $time_elapsed;
 				hdr_record_value($hdr_read, $time_elapsed);
@@ -249,11 +266,12 @@ class PerformanceTest
 				$cell['value']     = $value;
 				$cell['qualifier'] = 'field0';//Specify qualifier (optional)
 
-				$mutationCell = $this->BigtableTable->mutationCell($cell);
+				$mutationCell = $this->table->mutationCell($cell);
 				$startAt = $this->milliSec();
-				$this->BigtableTable->mutateRow($tableId, $randomRowKey, [$mutationCell]);
+				$this->table->mutateRow($tableId, $randomRowKey, [$mutationCell]);
 				$time_elapsed = $this->milliSec() - $startAt;
-				$writeRowsTotal['success'][] = ['rowKey' => $randomRowKey, 'microseconds' => $time_elapsed];
+				$writeRowsTotal['success']++;
+
 				$write_oprations_total_time += $time_elapsed;
 				hdr_record_value($hdr_write, $time_elapsed);
 			}
@@ -265,7 +283,7 @@ class PerformanceTest
 		//Read operations
 		$min_read       = hdr_min($hdr_read);
 		$max_read       = hdr_max($hdr_read);
-		$total_read     = count($readRowsTotal['success'])+count($readRowsTotal['failure']);
+		$total_read     = $readRowsTotal['success'] + $readRowsTotal['failure'];
 		$totalReadTimeSec = $read_oprations_total_time/1000;
 		$readThroughput = round($total_read/$totalReadTimeSec, 4);
 		$readOperations = [
@@ -281,14 +299,14 @@ class PerformanceTest
 			'p95_latency'        => hdr_value_at_percentile($hdr_read, 95),
 			'p99_latency'        => hdr_value_at_percentile($hdr_read, 99),
 			'p99.99_latency'     => hdr_value_at_percentile($hdr_read, 99.99),
-			'success_operations' => count($readRowsTotal['success']),
-			'failed_operations'  => count($readRowsTotal['failure'])
+			'success_operations' => $readRowsTotal['success'],
+			'failed_operations'  => $readRowsTotal['failure']
 		];
 
 		//Write Operations
 		$min_write       = hdr_min($hdr_write);
 		$max_write       = hdr_max($hdr_write);
-		$total_write     = count($writeRowsTotal['success'])+count($writeRowsTotal['failure']);
+		$total_write     = $writeRowsTotal['success'] + $writeRowsTotal['failure'];
 		$totalWriteTimeSec = $write_oprations_total_time/1000;
 		$writeThroughput = round($total_write/$totalWriteTimeSec, 4);
 		$writeOperations = [
@@ -304,8 +322,8 @@ class PerformanceTest
 			'p95_latency'        => hdr_value_at_percentile($hdr_write, 95),
 			'p99_latency'        => hdr_value_at_percentile($hdr_write, 99),
 			'p99.99_latency'     => hdr_value_at_percentile($hdr_write, 99.99),
-			'success_operations' => count($writeRowsTotal['success']),
-			'failed_operations'  => count($writeRowsTotal['failure'])
+			'success_operations' => $writeRowsTotal['success'],
+			'failed_operations'  => $writeRowsTotal['failure']
 		];
 		return (['readOperations' => $readOperations, 'writeOperations' => $writeOperations]);
 	}
