@@ -70,6 +70,7 @@ class ScanTest
 		$total_row      = $option['totalRows']-1;
 		$rowLimit		= $option['limit'];
 		$readRowsTotal  = ['success' => 0, 'failure' => 0];
+		$totalRows = 0;
 
 		$hdr_read  = hdr_init(1, 3600000, 3);
 
@@ -106,6 +107,7 @@ class ScanTest
 			$res = $this->table->readRows($tableId, $optionalArg);
 			$time_elapsed = $this->currentMillies() - $startAt;
 			if (count($res)) {
+				$totalRows += count($res);
 				$readRowsTotal['success']++;
 			} else {
 				$readRowsTotal['failure']++;
@@ -121,7 +123,7 @@ class ScanTest
 		$max_read       = hdr_max($hdr_read);
 		$total_read     = $readRowsTotal['success'] + $readRowsTotal['failure'];
 		$totalReadTimeSec = $read_oprations_total_time/1000;
-		$readThroughput = round($total_read/$totalReadTimeSec, 4);
+		$readThroughput = round($totalRows/$totalReadTimeSec, 2);
 		$statisticsData = [
 			'operation_name'     => 'Read',
 			'run_time'           => $read_oprations_total_time,

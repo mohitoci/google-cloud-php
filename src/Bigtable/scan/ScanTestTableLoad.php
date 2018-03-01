@@ -169,7 +169,7 @@ class ScanTestTableLoad
 		$max           = hdr_max($hdr);
 		$total         = $index;
 		$totalSec      = $total_time_elapsed / 1000;
-		$throughput    = round($total/$totalSec, 4);
+		$throughput    = round($total/$totalSec, 2);
 		$statesticData = [
 			'operation_name'     => "Load ($batch_size Batch)",
 			'run_time'           => $total_time_elapsed,

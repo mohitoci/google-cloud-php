@@ -182,7 +182,7 @@ class PerformanceTest
 		$max           = hdr_max($hdr);
 		$total         = $index;
 		$totalSec      = $total_time_elapsed / 1000;
-		$throughput    = round($total/$totalSec, 4);
+		$throughput    = round($total/$totalSec, 2);
 		$statesticData = [
 			'operation_name'     => 'Data Load',
 			'run_time'           => $total_time_elapsed,
@@ -285,7 +285,7 @@ class PerformanceTest
 		$max_read       = hdr_max($hdr_read);
 		$total_read     = $readRowsTotal['success'] + $readRowsTotal['failure'];
 		$totalReadTimeSec = $read_oprations_total_time/1000;
-		$readThroughput = round($total_read/$totalReadTimeSec, 4);
+		$readThroughput = round($total_read/$totalReadTimeSec, 2);
 		$readOperations = [
 			'operation_name'     => 'Random Read',
 			'run_time'           => $read_oprations_total_time,
@@ -308,7 +308,7 @@ class PerformanceTest
 		$max_write       = hdr_max($hdr_write);
 		$total_write     = $writeRowsTotal['success'] + $writeRowsTotal['failure'];
 		$totalWriteTimeSec = $write_oprations_total_time/1000;
-		$writeThroughput = round($total_write/$totalWriteTimeSec, 4);
+		$writeThroughput = round($total_write/$totalWriteTimeSec, 2);
 		$writeOperations = [
 			'operation_name'     => 'Random Write',
 			'run_time'           => $write_oprations_total_time,
